@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Nhà nguyện Công giáo 3D trực tuyến: thắp nến, lần chuỗi Mân Côi, chầu Thánh Thể và cầu nguyện cùng mọi người.">
+<meta name="description" content="Nhà nguyện Công giáo 3D trực tuyến: thắp nến, lần chuỗi Mân Côi, Đàng Thánh Giá, hành hương và cầu nguyện cùng mọi người.">
 <title>Nhà Nguyện Ánh Nến</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -174,13 +174,17 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
       <li><span>Đức Mẹ</span>Thắp nến và lần chuỗi Mân Côi</li>
       <li><span>Nhà Tạm</span>Chầu Thánh Thể trong thinh lặng</li>
       <li><span>Chuông</span>Kinh Truyền Tin lúc 6 giờ, 12 giờ, 18 giờ</li>
+      <li><span>Hai bên</span>Đàng Thánh Giá 14 chặng</li>
+      <li><span>Hành hương</span>La Vang, Trà Kiệu, Phát Diệm, Đức Bà, Măng Đen</li>
       <li><span>Cửa vào</span>Tường ý nguyện</li>
     </ul>
     <div class="profile">
       <label class="field" for="nameInput">Tên hiển thị
         <input type="text" id="nameInput" maxlength="24" placeholder="Ví dụ: Giuse Minh" autocomplete="off"></label>
       <div class="plabel">Nhân vật</div>
-      <div class="seg" id="styleSeg"><button data-style="nam" aria-pressed="true">Nam</button><button data-style="nu" aria-pressed="false">Nữ, đội khăn voan</button></div>
+      <div class="seg" id="styleSeg"><button data-style="nam" aria-pressed="true">Nam</button><button data-style="nu" aria-pressed="false">Nữ, khăn voan</button><button data-style="aodai" aria-pressed="false">Áo dài</button></div>
+      <div class="plabel">Màu da</div>
+      <div class="swatches" id="skinSeg"></div>
       <div class="plabel">Màu áo</div>
       <div class="swatches" id="shirtSeg"></div>
     </div>
@@ -196,6 +200,7 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
     <span class="chip" id="presence">1 người trong nhà nguyện</span>
     <button class="chip" id="viewBtn">Góc nhìn</button>
     <button class="chip" id="soundBtn" aria-pressed="true">Âm thanh</button>
+    <button class="chip" id="pilgrimBtn">Hành hương</button>
     <button class="chip" id="journalBtn">Nhật ký</button>
   </div>
 </div>
@@ -250,6 +255,60 @@ const MYSTERIES = {
   thuong:{name:'Năm Sự Thương', items:['Đức Chúa Giêsu lo buồn đổ mồ hôi máu','Đức Chúa Giêsu chịu đánh đòn','Đức Chúa Giêsu chịu đội mão gai','Đức Chúa Giêsu vác cây Thánh Giá','Đức Chúa Giêsu chịu chết trên cây Thánh Giá']},
   mung:{name:'Năm Sự Mừng', items:['Đức Chúa Giêsu sống lại','Đức Chúa Giêsu lên trời','Đức Chúa Thánh Thần hiện xuống','Đức Chúa Trời cho Đức Bà lên trời','Đức Chúa Trời thưởng Đức Bà trên trời']}
 };
+/* ---------- Lịch Phụng vụ (theo lịch Rôma chung; lịch giáo phận có thể khác đôi chút) ---------- */
+const LIT_COLORS = {xanh:0x2f6b3f, tim:0x5b2a7a, hong:0xc97a9a, trang:0xf1ece0, do:0x9c1f2e};
+const LIT_COLOR_NAME = {xanh:'xanh lá', tim:'tím', hong:'hồng', trang:'trắng', do:'đỏ'};
+function easterDate(y){
+  const a = y%19, b = Math.floor(y/100), c = y%100, d = Math.floor(b/4), e = b%4, f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3);
+  const h = (19*a+b-d-g+15)%30, i = Math.floor(c/4), k = c%4, l = (32+2*e+2*i-h-k)%7, m = Math.floor((a+11*h+22*l)/451);
+  const month = Math.floor((h+l-7*m+114)/31), day = ((h+l-7*m+114)%31)+1;
+  return new Date(y, month-1, day);
+}
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate()+n);
+const dayNum = d => Math.round(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()/864e5);
+function adventStart(y){ const x = new Date(y, 11, 25), dow = x.getDay(); return addDays(x, -(dow === 0 ? 7 : dow) - 21); }
+function epiphany(y){ let d = new Date(y, 0, 2); while(d.getDay() !== 0) d = addDays(d, 1); return d; }   // Chúa nhật từ 2 đến 8 tháng 1
+function baptismOfLord(y){ const ep = epiphany(y); return ep.getDate() >= 7 ? addDays(ep, 1) : addDays(ep, 7); }
+function holyFamily(y){ for(let d = 26; d <= 31; d++){ const x = new Date(y, 11, d); if(x.getDay() === 0) return x; } return new Date(y, 11, 30); }
+function liturgyOf(date = new Date()){
+  const y = date.getFullYear(), n = dayNum(date), E = dayNum(easterDate(y)), adv = dayNum(adventStart(y));
+  const bap = dayNum(baptismOfLord(y)), xmas = dayNum(new Date(y, 11, 25));
+  // mùa
+  let season, color;
+  if(n <= bap){ season = 'Mùa Giáng Sinh'; color = 'trang'; }
+  else if(n >= E-46 && n < E-3){ season = 'Mùa Chay'; color = 'tim'; }
+  else if(n >= E-3 && n < E){ season = 'Tam Nhật Vượt Qua'; color = 'tim'; }
+  else if(n >= E && n <= E+49){ season = 'Mùa Phục Sinh'; color = 'trang'; }
+  else if(n >= adv && n < xmas){ season = 'Mùa Vọng'; color = 'tim'; }
+  else if(n >= xmas){ season = 'Mùa Giáng Sinh'; color = 'trang'; }
+  else { season = 'Mùa Thường Niên'; color = 'xanh'; }
+  // lễ thay đổi theo năm
+  const movable = [
+    [E-46, 'Thứ Tư Lễ Tro', 'tim'], [E-21, 'Chúa nhật IV Mùa Chay (Laetare)', 'hong'],
+    [E-7, 'Chúa nhật Lễ Lá', 'do'], [E-3, 'Thứ Năm Tuần Thánh', 'trang'], [E-2, 'Thứ Sáu Tuần Thánh', 'do'],
+    [E-1, 'Thứ Bảy Tuần Thánh', 'tim'], [E, 'Chúa Giêsu Phục Sinh', 'trang'], [E+7, 'Chúa nhật Lòng Chúa Thương Xót', 'trang'],
+    [E+42, 'Chúa Giêsu Lên Trời', 'trang'], [E+49, 'Chúa Thánh Thần Hiện Xuống', 'do'], [E+56, 'Chúa Ba Ngôi', 'trang'],
+    [E+63, 'Mình và Máu Thánh Chúa Kitô', 'trang'], [E+68, 'Thánh Tâm Chúa Giêsu', 'trang'],
+    [adv-7, 'Chúa Giêsu Kitô Vua Vũ Trụ', 'trang'], [adv, 'Chúa nhật I Mùa Vọng', 'tim'], [adv+14, 'Chúa nhật III Mùa Vọng (Gaudete)', 'hong'],
+    [dayNum(epiphany(y)), 'Chúa Hiển Linh', 'trang'], [bap, 'Chúa Giêsu chịu phép rửa', 'trang'], [dayNum(holyFamily(y)), 'Thánh Gia Thất', 'trang']
+  ];
+  // lễ cố định (tháng, ngày)
+  const fixed = [
+    [1,1,'Thánh Maria, Mẹ Thiên Chúa','trang'], [2,2,'Dâng Chúa Giêsu trong Đền Thánh','trang'], [3,19,'Thánh Giuse, Bạn Trăm Năm Đức Maria','trang'],
+    [3,25,'Truyền Tin cho Đức Mẹ','trang'], [6,29,'Thánh Phêrô và Thánh Phaolô Tông đồ','do'], [8,6,'Chúa Hiển Dung','trang'],
+    [8,15,'Đức Mẹ Lên Trời','trang'], [9,14,'Suy tôn Thánh Giá','do'], [10,7,'Đức Mẹ Mân Côi','trang'],
+    [11,1,'Các Thánh Nam Nữ','trang'], [11,2,'Cầu cho các tín hữu đã qua đời','tim'], [11,24,'Các Thánh Tử Đạo Việt Nam','do'],
+    [12,8,'Đức Mẹ Vô Nhiễm Nguyên Tội','trang'], [12,25,'Chúa Giáng Sinh','trang']
+  ];
+  let feast = null;
+  for(const [dn, name, c] of movable) if(dn === n){ feast = {name, color:c}; break; }
+  if(!feast){
+    const inHolyWeek = n >= E-7 && n <= E+7;   // tuần thánh và tuần bát nhật Phục Sinh: lễ cố định được dời, ở đây chỉ bỏ qua
+    for(const [mo, d, name, c] of fixed) if(date.getMonth()+1 === mo && date.getDate() === d && !inHolyWeek){ feast = {name, color:c}; break; }
+  }
+  return {season, color: feast ? feast.color : color, feast: feast ? feast.name : null};
+}
+
 const DAY_SET = ['mung','vui','thuong','mung','sang','thuong','vui']; // CN..T7
 const ORD = ['Thứ nhất','Thứ hai','Thứ ba','Thứ bốn','Thứ năm'];
 const ANGELUS = [
@@ -514,7 +573,7 @@ const altarY = .45;
 box(2.4, 1, 1, M.marble, 0, altarY+.5, -10.6, true);
 box(2.56, .04, 1.14, M.cloth, 0, altarY+1.02, -10.6);
 box(2.56, .35, .02, M.cloth, 0, altarY+.85, -10.03);
-box(.18, .3, .02, M.gold, 0, altarY+.85, -10.015);
+box(.14, .22, .01, M.gold, 0, altarY+.85, -9.985);
 // bục giảng
 box(.6, 1.15, .5, M.darkWood, 2.6, altarY+.575, -9.7, true);
 box(.7, .05, .45, M.darkWood, 2.6, altarY+1.2, -9.72).rotation.x = -.35;
@@ -646,8 +705,165 @@ refreshNotes();
 const font = new THREE.Mesh(new THREE.CylinderGeometry(.28,.14,.2,20), M.marble); font.position.set(-1.9, .95, 9.3); scene.add(font);
 box(.14, .85, .14, M.marble, -1.9, .43, 9.3, true);
 
+
+// ---- màu Phụng vụ: khăn bàn thờ và hai băng rôn hai bên Thánh Giá ----
+const M_LIT = std({color:LIT_COLORS.xanh, roughness:.85});
+box(2.4, .3, .025, M_LIT, 0, altarY+.83, -10.0);
+for(const s of [-1,1]){
+  box(.5, 2.3, .03, M_LIT, s*1.75, 3.9, ZB+.05);
+  box(.56, .06, .05, M.gold, s*1.75, 5.07, ZB+.06);
+}
+let litToday = null;
+function applyLiturgy(){
+  litToday = liturgyOf(new Date());
+  M_LIT.color.setHex(LIT_COLORS[litToday.color]);
+}
+applyLiturgy();
+
+// ---- Đàng Thánh Giá: 14 chặng trên hai bên tường ----
+const STATIONS = [
+  ['Chúa Giêsu bị kết án tử hình', 'Người vô tội chịu kết án bất công mà vẫn hiền lành. Xin cho con biết bình an khi bị hiểu lầm.'],
+  ['Chúa Giêsu vác Thánh Giá', 'Chúa đón nhận Thánh Giá vì yêu thương. Xin cho con can đảm vác thập giá đời mình mỗi ngày.'],
+  ['Chúa Giêsu ngã xuống lần thứ nhất', 'Chúa ngã xuống nhưng lại đứng lên. Xin cho con không thất vọng khi vấp ngã.'],
+  ['Chúa Giêsu gặp Đức Mẹ', 'Mẹ và Con gặp nhau trong đau khổ. Xin Mẹ ở bên những người mẹ đang khóc vì con cái mình.'],
+  ['Ông Simon giúp Chúa Giêsu vác Thánh Giá', 'Ông Simon được mời chia sẻ gánh nặng với Chúa. Xin cho con sẵn lòng nâng đỡ người bên cạnh.'],
+  ['Bà Vêrônica lau mặt Chúa Giêsu', 'Bà Vêrônica can đảm đến gần Chúa. Xin cho con nhận ra khuôn mặt Chúa nơi người đau khổ.'],
+  ['Chúa Giêsu ngã xuống lần thứ hai', 'Sức nặng của tội lỗi đè trên vai Chúa. Xin cho con biết chỗi dậy nhờ ơn tha thứ.'],
+  ['Chúa Giêsu an ủi các phụ nữ thành Giêrusalem', 'Giữa đau đớn, Chúa vẫn nghĩ đến người khác. Xin cho con biết thương xót anh chị em mình.'],
+  ['Chúa Giêsu ngã xuống lần thứ ba', 'Kiệt sức mà Chúa vẫn tiến bước. Xin cho con trung thành đến cùng.'],
+  ['Chúa Giêsu bị lột áo', 'Chúa chịu mất cả phẩm giá bên ngoài. Xin cho con biết tôn trọng phẩm giá của mọi người.'],
+  ['Chúa Giêsu bị đóng đinh vào Thánh Giá', 'Chúa giang tay trên Thánh Giá để ôm lấy mọi người. Xin cho con biết tha thứ như Chúa.'],
+  ['Chúa Giêsu chết trên Thánh Giá', 'Chúa phó linh hồn trong tay Chúa Cha. Xin cho con biết phó thác cuộc đời trong tay Thiên Chúa.'],
+  ['Tháo xác Chúa Giêsu xuống khỏi Thánh Giá', 'Đức Mẹ đón nhận xác Con vào lòng. Xin Mẹ ôm lấy những ai đang mất người thân.'],
+  ['Táng xác Chúa Giêsu trong mồ', 'Xác Chúa nằm trong mồ, chờ ngày Phục Sinh. Xin cho con giữ vững niềm hy vọng.']
+];
+const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV'];
+const STATION_Z_LEFT = [-4.3, -2.6, -.3, 1.5, 2.8, 4.6, 5.9];   // chặng 1–7: tường trái, từ cung thánh ra cửa
+const stationSpots = [];
+STATIONS.forEach(([name], i) => {
+  const left = i < 7, z = left ? STATION_Z_LEFT[i] : STATION_Z_LEFT[13 - i], s = left ? -1 : 1;
+  const tex = canvasTex(128, 160, (g, w, h) => {
+    g.fillStyle = '#4a2f1a'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e9dcc0'; g.fillRect(8, 8, w-16, h-16);
+    g.fillStyle = '#5a3a22'; g.fillRect(58, 26, 12, 70); g.fillRect(40, 44, 48, 12);
+    g.fillStyle = '#3a2514'; g.font = 'bold 30px Georgia, serif'; g.textAlign = 'center'; g.fillText(ROMAN[i], 64, 136);
+  });
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(.36, .45), new THREE.MeshStandardMaterial({map:tex, roughness:.8}));
+  plaque.position.set(s*(W/2 - .012), 1.9, z); plaque.rotation.y = -s*Math.PI/2; scene.add(plaque);
+  stationSpots.push({x:s*5.25, z});
+});
+
+// ---- Hành hương: 5 đền thánh, dựng ngoài trời ở vùng riêng (x = SX) ----
+const SX = 400;
+const SHRINES = [
+  {id:'lavang', name:'Đức Mẹ La Vang', place:'Hải Lăng, Quảng Trị',
+   blurb:'Theo truyền thống, năm 1798 Đức Mẹ đã hiện ra an ủi những giáo dân đang lánh nạn trong rừng La Vang. Nhà thờ La Vang được nâng lên bậc Tiểu Vương cung thánh đường năm 1961.',
+   sky:['#7fb4e6','#f4dcb4'], ground:'#5d8a3c', fog:[0xe9dcc4, 30, 90], mantle:0x3d63b0, child:true, landmark:'lavang'},
+  {id:'trakieu', name:'Đức Mẹ Trà Kiệu', place:'Duy Xuyên, Quảng Nam',
+   blurb:'Tương truyền năm 1885, Đức Mẹ đã che chở giáo dân Trà Kiệu trong cơn bách hại. Đền thánh nằm trên đồi Bửu Châu, mỗi năm đón nhiều đoàn hành hương.',
+   sky:['#6aa7e0','#dff0ff'], ground:'#6b9a44', fog:[0xd7e8f5, 30, 95], mantle:0x7fa3d6, landmark:'trakieu'},
+  {id:'phatdiem', name:'Nhà thờ đá Phát Diệm', place:'Kim Sơn, Ninh Bình',
+   blurb:'Quần thể nhà thờ bằng đá và gỗ do cha Phêrô Trần Lục xây dựng từ năm 1875 đến 1899, mang dáng mái đình làng Việt Nam.',
+   sky:['#8aa4bf','#e6e3da'], ground:'#58804a', fog:[0xdcdcd4, 25, 80], mantle:0x4d6fb8, landmark:'phatdiem'},
+  {id:'ducba', name:'Nhà thờ Đức Bà Sài Gòn', place:'Quận 1, TP. Hồ Chí Minh',
+   blurb:'Nhà thờ gạch đỏ xây từ năm 1877 đến 1880, được nâng lên bậc Vương cung thánh đường năm 1962. Tượng Đức Mẹ Hòa Bình đứng ở quảng trường phía trước.',
+   sky:['#4f93dc','#cfe6fb'], ground:'#5f9446', fog:[0xcfe3f5, 35, 110], mantle:0xe8e4da, landmark:'ducba'},
+  {id:'mangden', name:'Đức Mẹ Măng Đen', place:'Kon Plông, Kon Tum',
+   blurb:'Linh địa giữa rừng thông trên cao nguyên, nơi giáo dân nhiều nơi về hành hương và cầu nguyện bên tượng Đức Mẹ.',
+   sky:['#9fb7c9','#e5ecef'], ground:'#4f7a3e', fog:[0xdfe7ea, 14, 55], mantle:0x6b8fd0, landmark:'mangden'}
+];
+let world = 'chapel', shrineGroup = null;
+const shrineColliders = [];
+const passport = store.get('passport', {});
+const sunLight = new THREE.DirectionalLight(0xfff2dc, 2.4);
+sunLight.position.set(SX+25, 35, 20); sunLight.target.position.set(SX, 0, 0); sunLight.visible = false;
+scene.add(sunLight, sunLight.target);
+function buildShrine(sp){
+  disposeShrine();
+  const g = shrineGroup = new THREE.Group(); scene.add(g);
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(SX+x, y, z); g.add(m); return m; };
+  const sbox = (w, h, d, mat, x, y, z, col) => { const m = add(new THREE.BoxGeometry(w, h, d), mat, x, y, z); if(col) shrineColliders.push({minX:SX+x-w/2, maxX:SX+x+w/2, minZ:z-d/2, maxZ:z+d/2}); return m; };
+  const mat = (c, o = {}) => std(Object.assign({color:c, roughness:.85}, o));
+  const trunk = mat(0x5a3d26), leaf = mat(0x3f6e35), pine = mat(0x2f5a3a), stone = mat(0xd8d2c4), white = mat(0xf2eee4);
+  const tree = (x, z, s = 1, kind = 'round') => {
+    add(new THREE.CylinderGeometry(.14*s, .24*s, 2.2*s, 7), trunk, x, 1.1*s, z);
+    const crown = kind === 'pine' ? add(new THREE.ConeGeometry(1.3*s, 4*s, 8), pine, x, 3.6*s, z) : add(new THREE.SphereGeometry(1.8*s, 10, 8), leaf, x, 3.4*s, z);
+    if(kind !== 'pine') crown.scale.y = .8;
+    shrineColliders.push({minX:SX+x-.35*s, maxX:SX+x+.35*s, minZ:z-.35*s, maxZ:z+.35*s});
+  };
+  // bầu trời, mặt đất, sân đá
+  const skyTex = canvasTex(8, 256, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, sp.sky[0]); gr.addColorStop(.75, sp.sky[1]); gr.addColorStop(1, sp.sky[1]); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+  const sky = add(new THREE.SphereGeometry(70, 24, 16), new THREE.MeshBasicMaterial({map:skyTex, side:THREE.BackSide, fog:false, depthWrite:false}), 0, 0, 0);
+  sky.renderOrder = -1;
+  const grassTex = canvasTex(128, 128, (c, w, h) => { const r = rng(42); c.fillStyle = sp.ground; c.fillRect(0, 0, w, h); for(let k=0;k<900;k++){ c.fillStyle = `rgba(${r()>.5?255:0},${r()>.5?255:40},0,${r()*.08})`; c.fillRect(r()*w, r()*h, 2, 2); } }, [40, 40]);
+  const ground = add(new THREE.PlaneGeometry(140, 140), std({map:grassTex, roughness:1}), 0, 0, 0); ground.rotation.x = -Math.PI/2;
+  const plazaTex = canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#cfc6b4'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(90,80,60,.35)'; c.lineWidth = 2; for(let i=0;i<=8;i++){ c.beginPath(); c.moveTo(i*16,0); c.lineTo(i*16,h); c.stroke(); c.beginPath(); c.moveTo(0,i*16); c.lineTo(w,i*16); c.stroke(); } }, [6, 6]);
+  const plaza = add(new THREE.CircleGeometry(8, 40), std({map:plazaTex, roughness:.9}), 0, .012, 0); plaza.rotation.x = -Math.PI/2;
+  const path = add(new THREE.PlaneGeometry(3, 12), std({map:plazaTex, roughness:.9}), 0, .011, 12); path.rotation.x = -Math.PI/2;
+  // tượng Đức Mẹ trên bệ
+  const base = sp.landmark === 'ducba' ? 2.2 : 1.4, S = 1.5;
+  sbox(1.3, base, 1.3, stone, 0, base/2, -3, true);
+  sbox(1.8, .3, 1.8, stone, 0, .15, -3);
+  const st = new THREE.Group(); st.position.set(SX, base, -3); st.scale.setScalar(S); g.add(st);
+  const robeM = mat(0xf5f1ea, {roughness:.5}), mantleM = mat(sp.mantle, {roughness:.55, side:THREE.DoubleSide}), skinM = mat(0xead2b8, {roughness:.55});
+  st.add(new THREE.Mesh(new THREE.LatheGeometry([[0,0],[.3,0],[.28,.2],[.24,.6],[.2,.95],[.16,1.12],[.11,1.22],[0,1.24]].map(p => new THREE.Vector2(p[0], p[1])), 28), robeM));
+  const mn = new THREE.Mesh(new THREE.CylinderGeometry(.165, .33, .98, 28, 1, true, .55, Math.PI*2-1.1), mantleM); mn.position.y = .74; st.add(mn);
+  const vl = new THREE.Mesh(new THREE.CylinderGeometry(.1, .19, .32, 24, 1, true, .7, Math.PI*2-1.4), mantleM); vl.position.y = 1.3; st.add(vl);
+  const hd = new THREE.Mesh(new THREE.SphereGeometry(.088, 20, 16), skinM); hd.position.set(0, 1.37, .035); st.add(hd);
+  const vt = new THREE.Mesh(new THREE.SphereGeometry(.112, 20, 16, Math.PI*.92, Math.PI*1.16, 0, Math.PI*.62), mantleM); vt.position.set(0, 1.38, -.01); st.add(vt);
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.075, .065, .07, 12, 1, true), M.gold); crown.position.set(0, 1.49, 0); st.add(crown);
+  if(sp.child){   // Đức Mẹ bồng Chúa Hài Đồng
+    const ch = new THREE.Group(); ch.position.set(.12, .92, .16); st.add(ch);
+    ch.add(new THREE.Mesh(new THREE.CapsuleGeometry(.045, .12, 4, 8), robeM));
+    const chh = new THREE.Mesh(new THREE.SphereGeometry(.042, 12, 10), skinM); chh.position.y = .13; ch.add(chh);
+  }else{
+    const hands = new THREE.Mesh(new THREE.ConeGeometry(.045, .16, 10), skinM); hands.position.set(0, .98, .2); hands.rotation.x = -.25; st.add(hands);
+  }
+  for(const s of [-1,1]){ add(new THREE.CylinderGeometry(.2, .16, .35, 12), mat(0x8a5a3a), s*1.3, .18, -1.9); add(new THREE.SphereGeometry(.28, 10, 8), mat(0xf4f0f6), s*1.3, .5, -1.9); }
+  // công trình riêng của từng nơi (chỉ phỏng theo, không phải mô hình chính xác)
+  if(sp.landmark === 'ducba'){
+    const brick = mat(0xa5442f);
+    sbox(16, 10, 3, brick, 0, 5, -18, true);
+    for(const s of [-1,1]){ sbox(3.6, 17, 3.6, brick, s*6.4, 8.5, -17.6, true); add(new THREE.ConeGeometry(2.3, 6.5, 4), mat(0x6f7f78), s*6.4, 20.2, -17.6).rotation.y = Math.PI/4; }
+    add(new THREE.CircleGeometry(1.4, 32), new THREE.MeshBasicMaterial({map:roseTex, color:0xc8c8d8}), 0, 7, -16.48);
+    for(const x of [-3, 0, 3]) sbox(1.6, 3.2, .1, mat(0x2a1a14), x, 1.6, -16.45);
+    for(const [x, z] of [[-10,-4],[10,-4],[-12,6],[12,6],[-8,12],[8,12]]) tree(x, z, 1.1);
+  }else if(sp.landmark === 'lavang'){
+    sbox(15, 7, 2.6, white, 0, 3.5, -18, true);
+    const roof = add(new THREE.CylinderGeometry(4.2, 4.2, 15.4, 3, 1), mat(0x9a4a32), 0, 8.1, -18); roof.rotation.z = Math.PI/2; roof.scale.set(1, 1, .5);
+    for(const x of [-4.5, 0, 4.5]) sbox(2.4, 3.8, .1, mat(0x3a2a20), x, 1.9, -16.65);
+    sbox(3, 12, 3, white, 0, 6, -21, true); add(new THREE.ConeGeometry(2.1, 3, 4), mat(0x9a4a32), 0, 13.5, -21).rotation.y = Math.PI/4;
+    for(const [x, z] of [[-9,-6],[9,-6],[-12,4],[12,4]]) tree(x, z, 1.7);
+  }else if(sp.landmark === 'trakieu'){
+    const hill = add(new THREE.SphereGeometry(13, 24, 16), mat(0x5f8f3e), 0, -3, -26); hill.scale.y = .55;
+    shrineColliders.push({minX:SX-11, maxX:SX+11, minZ:-36, maxZ:-15});
+    sbox(4.5, 3.4, 4.5, white, 0, 5.2, -26); add(new THREE.ConeGeometry(3.6, 2.4, 4), mat(0x9a4a32), 0, 8.1, -26).rotation.y = Math.PI/4;
+    for(let i=0;i<6;i++) sbox(3, .2, .7, stone, 0, .1 + i*.35, -13.5 - i*.6);
+    for(const [x, z] of [[-9,-5],[9,-5],[-11,5],[11,5]]) tree(x, z, 1.2);
+  }else if(sp.landmark === 'phatdiem'){
+    const dark = mat(0x77716a), roofM = mat(0x5a4a42);
+    sbox(16, 5.5, 9, dark, 0, 2.75, -20, true);
+    for(const s of [-1,1]){ const r = sbox(17, .35, 5.6, roofM, 0, 7.1, -20 + s*2.2); r.rotation.x = s*.55; }
+    sbox(6, 7, 6, dark, 0, 3.5, -11.5, true);
+    for(const s of [-1,1]){ const r = sbox(7, .3, 4, roofM, 0, 7.9, -11.5 + s*1.5); r.rotation.x = s*.6; }
+    const pond = add(new THREE.PlaneGeometry(10, 6), std({color:0x4f7f9a, roughness:.15, metalness:.3}), -12, .02, 4); pond.rotation.x = -Math.PI/2;
+    shrineColliders.push({minX:SX-17, maxX:SX-7, minZ:1, maxZ:7});
+    for(const [x, z] of [[10,-3],[12,6],[-12,-6]]) tree(x, z, 1.2);
+  }else if(sp.landmark === 'mangden'){
+    const rock = add(new THREE.DodecahedronGeometry(1.6, 0), mat(0x8a8780), 0, .6, -3); rock.scale.set(1.2, .5, 1.2);
+    const r = rng(9);
+    for(let k=0;k<34;k++){ const a = r()*Math.PI*2, d = 10 + r()*16; tree(Math.cos(a)*d, Math.sin(a)*d - 4, .9 + r()*.6, 'pine'); }
+  }
+}
+function disposeShrine(){
+  if(!shrineGroup) return;
+  scene.remove(shrineGroup);
+  shrineGroup.traverse(o => { o.geometry?.dispose?.(); });
+  shrineGroup = null; shrineColliders.length = 0;
+}
+
 // ---- ánh sáng chung ----
-scene.add(new THREE.HemisphereLight(0x8a96b8, 0x2b1f16, .55));
+const hemi = new THREE.HemisphereLight(0x8a96b8, 0x2b1f16, .55); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x8fa3d9, .35); moon.position.set(-8, 10, 3); scene.add(moon);
 for(const z of [5.5, -.5, -6.5]){
   const lantern = new THREE.Mesh(new THREE.CylinderGeometry(.16,.2,.34,8), new THREE.MeshStandardMaterial({color:0x2a1c0e, emissive:0xffb35c, emissiveIntensity:1.6}));
@@ -673,6 +889,7 @@ const SHIRTS = ['#eeeae2','#4d6fb8','#7a5236','#6d7280','#7d2430','#3f6b4e'];
 const SKINS = [0xe9c6a2, 0xd6a47c, 0xb7835f];
 const shadowTex = glowTex('rgba(0,0,0,.6)', 'rgba(0,0,0,.28)');
 const POSE_PY = {stand:.91, sit:.575, kneel:.46};
+const EYE_MAT = new THREE.MeshStandardMaterial({color:0x1a1210, roughness:.4});
 const BEAD_MAT = new THREE.MeshStandardMaterial({color:0xe8d9b5, roughness:.4, metalness:.3, emissive:0x3a2a10});   // độ cao hông theo tư thế
 function labelSprite(text){
   const c = document.createElement('canvas'); c.width = 512; c.height = 96; const g = c.getContext('2d');
@@ -689,10 +906,11 @@ function labelSprite(text){
 const CROSS_KEYS = [[0,null],[.45,-1.05,.5,-2.45],[.9,-.55,.42,-1.95],[1.3,-.85,.9,-2.2],[1.7,-.85,.2,-2.35],[2.1,null]];
 class Avatar{
   constructor(look = {}, name = ''){
-    const female = look.style === 'nu', shirtCol = new THREE.Color(SHIRTS[look.shirt ?? 0] || SHIRTS[0]);
-    const skin = std({color:SKINS[look.skin ?? 0], roughness:.7});
+    const style = ['nam','nu','aodai'].includes(look.style) ? look.style : 'nam', female = style !== 'nam', aodai = style === 'aodai';
+    const shirtCol = new THREE.Color(SHIRTS[look.shirt ?? 0] || SHIRTS[0]);
+    const skin = std({color:SKINS[look.skin] ?? SKINS[0], roughness:.7});
     const shirt = std({color:shirtCol, roughness:.85});
-    const lower = std({color: female ? shirtCol.clone().multiplyScalar(.78) : 0x2b2f3a, roughness:.85, side:THREE.DoubleSide});
+    const lower = std({color: aodai ? 0xf4f1ea : female ? shirtCol.clone().multiplyScalar(.78) : 0x2b2f3a, roughness:.85, side:THREE.DoubleSide});
     const hairM = std({color:0x1c1511, roughness:.9}), shoe = std({color:0x161616, roughness:.6});
     this.root = new THREE.Group();
     const P = this.pelvis = new THREE.Group(); P.position.y = .91; this.root.add(P);
@@ -701,12 +919,26 @@ class Avatar{
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.15,.26,4,12), shirt); torso.position.y = .26; torso.scale.set(1.05,1,.72); spine.add(torso);
     const neck = this.neck = new THREE.Group(); neck.position.y = .54; spine.add(neck);
     const head = new THREE.Mesh(new THREE.SphereGeometry(.105,18,14), skin); head.position.y = .12; neck.add(head);
+    for(const sx of [-1,1]){   // mắt và lông mày
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(.014,8,6), EYE_MAT); eye.position.set(sx*.037,.136,.1); neck.add(eye);
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(.034,.007,.01), hairM); brow.position.set(sx*.038,.165,.098); brow.rotation.z = sx*-.12; neck.add(brow);
+    }
     const hair = new THREE.Mesh(new THREE.SphereGeometry(.112,18,12,0,Math.PI*2,0,Math.PI*.5), hairM); hair.position.set(0,.135,-.012); hair.rotation.x = -.28; neck.add(hair);
     if(female){
-      const back = new THREE.Mesh(new THREE.BoxGeometry(.2,.26,.06), hairM); back.position.set(0,.03,-.08); neck.add(back);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(.2,.3,.06), hairM); back.position.set(0,.01,-.08); neck.add(back);
+    }
+    if(style === 'nu'){
       const veil = new THREE.Mesh(new THREE.SphereGeometry(.126,18,12,Math.PI*.95,Math.PI*1.1,0,Math.PI*.64), std({color:0xffffff, roughness:.6, transparent:true, opacity:.88, side:THREE.DoubleSide}));
       veil.position.set(0,.13,-.012); neck.add(veil);
       this.skirt = new THREE.Mesh(new THREE.CylinderGeometry(.16,.25,.5,18,1,true), lower); this.skirt.position.y = -.27; P.add(this.skirt);
+    }
+    if(aodai){   // áo dài: cổ đứng và hai tà trước sau
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(.058,.064,.06,14,1,true), shirt); collar.position.y = .03; neck.add(collar);
+      const flapM = std({color:shirtCol, roughness:.7, side:THREE.DoubleSide});
+      this.flapF = new THREE.Group(); this.flapF.position.set(0,-.02,.075); P.add(this.flapF);
+      const ff = new THREE.Mesh(new THREE.PlaneGeometry(.29,.82), flapM); ff.position.y = -.41; this.flapF.add(ff);
+      this.flapB = new THREE.Group(); this.flapB.position.set(0,-.02,-.085); P.add(this.flapB);
+      this.flapB.add(ff.clone());
     }
     const arm = side => {
       const sh = new THREE.Group(); sh.position.set(side*.2,.47,0); spine.add(sh);
@@ -773,6 +1005,7 @@ class Avatar{
     this.rArm.sh.rotation.set(j.rsx, 0, j.rsz); this.rArm.el.rotation.x = j.rex;
     this.lLeg.hip.rotation.x = j.lhx; this.lLeg.kn.rotation.x = j.lkx;
     this.rLeg.hip.rotation.x = j.rhx; this.rLeg.kn.rotation.x = j.rkx;
+    if(this.flapF){ const hips = (j.lhx + j.rhx)/2; this.flapF.rotation.x = Math.min(0, hips)*.95; this.flapB.rotation.x = Math.max(0, -hips)*.35; }
     if(this.skirt) this.skirt.scale.y = 1 - Math.min(.5, Math.abs(j.lhx)*.32);
   }
   dispose(){ scene.remove(this.root); this.root.traverse(o => o.geometry?.dispose?.()); }
@@ -891,6 +1124,7 @@ if(NET_CONFIG.supabaseUrl && NET_CONFIG.supabaseKey) useSupabaseNet(); else useL
 function onNet(m){
   if(!m || typeof m.id !== 'string' || m.id === me.id) return;
   if(m.bye){ const r = remotes.get(m.id); if(r){ r.av.dispose(); remotes.delete(m.id); paintPresence(); remoteGone(m.id, r); } return; }
+  if((m.w || 'chapel') !== world){ const old = remotes.get(m.id); if(old){ old.av.dispose(); remotes.delete(m.id); paintPresence(); remoteGone(m.id, old); } return; }
   if(!Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
   const now = performance.now();
   let r = remotes.get(m.id);
@@ -923,13 +1157,13 @@ function sendNet(){
   if(net.mode === 'off' || !started || !avatar) return;
   const a = avatar.root.position, s = avatar.state, now = performance.now();
   const ro = myRo();
-  const sig = [a.x.toFixed(2), a.z.toFixed(2), avatar.root.rotation.y.toFixed(2), s.pose, s.folded, s.gestureAt >= 0, JSON.stringify(ro)].join('|');
+  const sig = [world, a.x.toFixed(2), a.z.toFixed(2), avatar.root.rotation.y.toFixed(2), s.pose, s.folded, s.gestureAt >= 0, JSON.stringify(ro)].join('|');
   const changed = sig !== lastSig;
   if(!(changed && now - lastSent >= 200) && now - lastSent < 3000) return;
   lastSig = sig; lastSent = now;
-  net.send({id:me.id, name:profile.name || 'Khách hành hương', look:{style:profile.style, shirt:profile.shirt},
+  net.send({id:me.id, name:profile.name || 'Khách hành hương', look:{style:profile.style, shirt:profile.shirt, skin:profile.skin || 0},
     p:[+a.x.toFixed(3), +a.y.toFixed(3), +a.z.toFixed(3)], ry:+avatar.root.rotation.y.toFixed(3), pose:s.pose, py:s.py, folded:s.folded,
-    ga:s.gestureAt >= 0 ? Math.round(now - s.gestureAt) : -1, ro});
+    ga:s.gestureAt >= 0 ? Math.round(now - s.gestureAt) : -1, ro, w:world});
 }
 setInterval(sendNet, 100);
 addEventListener('pagehide', () => net.send({id:me.id, bye:true}));
@@ -1057,11 +1291,16 @@ canvas.addEventListener('pointercancel', releasePointer);
 
 function blocked(x, z){
   const r = player.r;
+  if(world !== 'chapel'){
+    if(Math.hypot(x - SX, z) > 24) return true;
+    for(const c of shrineColliders) if(x > c.minX-r && x < c.maxX+r && z > c.minZ-r && z < c.maxZ+r) return true;
+    return false;
+  }
   if(x < -W/2+.35 || x > W/2-.35 || z < ZB+.6 || z > ZF-.35) return true;
   for(const c of colliders) if(x > c.minX-r && x < c.maxX+r && z > c.minZ-r && z < c.maxZ+r) return true;
   return false;
 }
-const groundAt = z => z < -9 ? altarY : (z < -8.5 ? .22 : 0);
+const groundAt = z => world !== 'chapel' ? 0 : z < -9 ? altarY : (z < -8.5 ? .22 : 0);
 
 /* =====================================================================
    5. ĐIỂM TƯƠNG TÁC
@@ -1072,11 +1311,16 @@ const interactables = [
   {name:'Chuông Truyền Tin', x:BELL.x, z:-6.8, r:2, actions:[{label:'Kinh Truyền Tin', run:() => openAngelus()}, {label:'Rung chuông', run:() => swingBell(ring(3))}]},
   {name:'Tường ý nguyện', x:WALL_NOTES.x-.8, z:WALL_NOTES.z, r:2, actions:[{label:'Xem và viết ý nguyện', run:() => openIntentions()}]}
 ];
+STATIONS.forEach(([name], i) => interactables.push({name:`Chặng ${i+1} · ${name}`, x:stationSpots[i].x, z:stationSpots[i].z, r:1.2,
+  actions:[{label:'Suy niệm chặng này', run:() => openStation(i)}]}));
+for(const sp of SHRINES) interactables.push({world:sp.id, name:sp.name, x:SX, z:-1.2, r:3,
+  actions:[{label:'Cầu nguyện tại đây', run:() => openShrinePrayer()}, {label:'Trở về nhà nguyện', run:() => travelTo('chapel')}]});
 let current = null;
 const promptEl = $('#prompt'), hintEl = $('#hint');
 function findNearest(){
   let best = null, bd = 1e9; const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   for(const it of interactables){
+    if((it.world || 'chapel') !== world) continue;
     const dx = it.x - player.x, dz = it.z - player.z, d = Math.hypot(dx, dz);
     if(d > it.r) continue;
     if(d > 1 && (dx*fx + dz*fz)/d < .2) continue;
@@ -1273,6 +1517,87 @@ function openIntentions(){
   });
 }
 
+
+// ---- Đàng Thánh Giá ----
+const stationsToday = () => { const t = todayState(); if(!Array.isArray(t.st)) t.st = []; return t.st; };
+function openStation(i){
+  const [name, med] = STATIONS[i], seen = stationsToday();
+  openSheet(`Chặng ${i+1}`, name, `
+    <div class="prayer"><p><b>℣.</b> Lạy Chúa Kitô, chúng con thờ lạy và ca ngợi Chúa.</p><p><b>℟.</b> Vì Chúa đã dùng Thánh Giá Thánh mà cứu chuộc thế gian.</p></div>
+    <div class="meditation"><small>Suy niệm</small>${med}</div>
+    <p class="fine" style="margin:0">Bạn có thể đọc một Kinh Lạy Cha, một Kinh Kính Mừng và một Kinh Sáng Danh trước khi sang chặng tiếp theo.</p>
+    <div class="row">${i < 13 ? `<button class="btn" id="stNext">Đi tới chặng ${i+2}</button>` : '<button class="btn" id="stNext">Kết thúc Đàng Thánh Giá</button>'}<button class="btn ghost" id="stClose">Đóng</button></div>
+    <p class="fine">Hôm nay bạn đã suy niệm ${seen.length + (seen.includes(i) ? 0 : 1)}/14 chặng.</p>`);
+  if(!seen.includes(i)){ seen.push(i); store.set('journal', journal); }
+  if(i === 11 && avatar && avatar.state.pose === 'stand') setPose('kneel', {x:player.x, z:player.z, yaw, rootY:0, py:.46});   // chặng 12: quỳ xuống
+  $('#stClose').addEventListener('click', closeSheet);
+  $('#stNext').addEventListener('click', () => {
+    if(i < 13){
+      if(avatar && avatar.state.pose !== 'stand') setPose('stand');
+      const p = stationSpots[i+1]; player.x = p.x; player.z = p.z; yaw = p.x < 0 ? Math.PI/2 : -Math.PI/2;
+      openStation(i+1);
+    }else{
+      closeSheet();
+      if(stationsToday().length >= 14 && !todayState().stations){ note('stations', 'wayOfCross'); toast('Bạn đã đi trọn Đàng Thánh Giá hôm nay. Xin Chúa chúc lành cho bạn.'); }
+      else toast(`Bạn đã suy niệm ${stationsToday().length}/14 chặng hôm nay.`);
+    }
+  });
+}
+
+// ---- Hành hương ----
+const ENV_CHAPEL = {bg:0x0b0c12, near:16, far:36};
+function setEnv(sp){
+  const out = !!sp;
+  const bg = out ? sp.fog[0] : ENV_CHAPEL.bg;
+  scene.background.setHex(bg); scene.fog.color.setHex(bg);
+  scene.fog.near = out ? sp.fog[1] : ENV_CHAPEL.near; scene.fog.far = out ? sp.fog[2] : ENV_CHAPEL.far;
+  sunLight.visible = out; moon.visible = !out; hemi.intensity = out ? 1.15 : .55;
+  dust.visible = !out && !reduceMotion;
+  camera.far = out ? 160 : 80; camera.updateProjectionMatrix();
+}
+function travelTo(id){
+  closeSheet();
+  for(const [rid, r] of remotes){ r.av.dispose(); remotes.delete(rid); }
+  if(avatar){ seat = null; standBack = null; avatar.state.pose = 'stand'; avatar.state.py = null; paintActions(); }
+  if(id === 'chapel'){
+    world = 'chapel'; disposeShrine(); setEnv(null);
+    player.x = 0; player.z = 8.6; yaw = 0;
+    toast('Bạn đã trở về Nhà Nguyện Ánh Nến.');
+  }else{
+    const sp = SHRINES.find(s => s.id === id); if(!sp) return;
+    world = id; buildShrine(sp); setEnv(sp);
+    player.x = SX; player.z = 13; yaw = 0;
+    toast(`Bạn đã đến ${sp.name}. Hãy đến trước tượng Đức Mẹ để cầu nguyện và đóng dấu sổ hành hương.`, 6000);
+  }
+  player.y = 0; pitch = view.third ? -.15 : 0; lastSent = 0; current = null;
+  paintPresence(); paintToday();
+}
+function openPilgrimage(){
+  const n = SHRINES.filter(s => passport[s.id]).length;
+  openSheet('Hành hương', `Sổ hành hương: đã đến ${n}/${SHRINES.length} nơi`, `
+    <p class="fine" style="margin:0">Cảnh 3D chỉ phỏng theo các đền thánh, không phải mô hình chính xác. Người chơi ở cùng một nơi sẽ thấy nhau.</p>
+    <ul class="list">${world !== 'chapel' ? `<li class="who"><div><b>Nhà Nguyện Ánh Nến</b><span class="fine">Trở về nhà nguyện</span></div><button class="btn small" data-go="chapel">Trở về</button></li>` : ''}
+    ${SHRINES.map(s => `<li class="who"><div><b>${s.name}</b><span class="fine">${s.place}${passport[s.id] ? ` · đã đóng dấu ${new Date(passport[s.id]).toLocaleDateString('vi-VN')}` : ''}</span></div>${world === s.id ? '<span class="fine">Bạn đang ở đây</span>' : `<button class="btn ghost small" data-go="${s.id}">Đến nơi này</button>`}</li>`).join('')}</ul>`);
+  sheet.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => travelTo(b.dataset.go)));
+}
+function openShrinePrayer(){
+  const sp = SHRINES.find(s => s.id === world); if(!sp) return;
+  const stamped = passport[sp.id];
+  openSheet(sp.name, sp.place, `
+    <p style="margin:0;line-height:1.6">${sp.blurb}</p>
+    <div class="prayer"><h3>${PRAYERS.mung.title}</h3><p>${PRAYERS.mung.text}</p></div>
+    <div class="row"><button class="btn" id="stampBtn">${stamped ? 'Cầu nguyện thêm' : 'Đóng dấu sổ hành hương'}</button><button class="btn ghost" id="pilgrimList">Đi nơi khác</button></div>
+    ${stamped ? `<p class="fine">Bạn đã đóng dấu nơi này ngày ${new Date(stamped).toLocaleDateString('vi-VN')}.</p>` : ''}`);
+  if(avatar){ avatar.state.folded = true; paintActions(); }
+  $('#stampBtn').addEventListener('click', () => {
+    if(!passport[sp.id]){ passport[sp.id] = Date.now(); store.set('passport', passport); }
+    note('pilgrim'); closeSheet(); doCross();
+    const n = SHRINES.filter(s => passport[s.id]).length;
+    toast(`Đã đóng dấu ${sp.name}. Sổ hành hương: ${n}/${SHRINES.length} nơi.`);
+  });
+  $('#pilgrimList').addEventListener('click', openPilgrimage);
+}
+
 // ---- Kinh Truyền Tin ----
 function openAngelus(){
   const mung = `<p class="v"><i>Kinh Kính Mừng</i></p>`;
@@ -1296,9 +1621,11 @@ function openJournal(){
       <div class="stat"><b>${journal.candles||0}</b><span>ngọn nến đã thắp</span></div>
       <div class="stat"><b>${journal.decades||0}</b><span>chục kinh Mân Côi</span></div>
       <div class="stat"><b>${journal.adoreMin||0}</b><span>phút chầu Thánh Thể</span></div>
+      <div class="stat"><b>${journal.wayOfCross||0}</b><span>lần đi trọn Đàng Thánh Giá</span></div>
+      <div class="stat"><b>${SHRINES.filter(s => passport[s.id]).length}/${SHRINES.length}</b><span>đền thánh đã hành hương</span></div>
     </div>
     <div class="prayer"><h3>Hôm nay</h3><ul class="today">
-      ${item('candle','Thắp nến trước tượng Đức Mẹ')}${item('rosary','Lần một chục kinh Mân Côi')}${item('adore','Thinh lặng trước Nhà Tạm')}${item('angelus','Đọc Kinh Truyền Tin')}
+      ${item('candle','Thắp nến trước tượng Đức Mẹ')}${item('rosary','Lần một chục kinh Mân Côi')}${item('adore','Thinh lặng trước Nhà Tạm')}${item('angelus','Đọc Kinh Truyền Tin')}${item('stations','Đi trọn Đàng Thánh Giá')}${item('pilgrim','Hành hương một đền thánh')}
     </ul></div>
     <p class="fine">Nhật ký chỉ lưu trên trình duyệt này.</p>`);
 }
@@ -1367,7 +1694,13 @@ function paintSound(){ soundBtn.setAttribute('aria-pressed', String(soundOn)); s
 soundBtn.addEventListener('click', () => { soundOn = !soundOn; store.set('sound', soundOn); if(master) master.gain.value = soundOn ? .9 : 0; paintSound(); });
 paintSound();
 $('#journalBtn').addEventListener('click', openJournal);
-function paintToday(){ const d = new Date(); $('#today').textContent = `${WEEKDAYS[d.getDay()]} · ${MYSTERIES[DAY_SET[d.getDay()]].name} · Truyền Tin kế tiếp ${nextAngelus()}`; }
+$('#pilgrimBtn').addEventListener('click', openPilgrimage);
+function paintToday(){
+  const d = new Date(); if(!litToday || dayKey(d) !== litKey){ applyLiturgy(); litKey = dayKey(d); }
+  const where = world === 'chapel' ? '' : (SHRINES.find(s => s.id === world)?.name + ' · ');
+  $('#today').textContent = `${where}${WEEKDAYS[d.getDay()]} · ${litToday.feast || litToday.season} · màu ${LIT_COLOR_NAME[litToday.color]} · Truyền Tin ${nextAngelus()}`;
+}
+let litKey = '';
 
 // ---- hồ sơ nhân vật ở màn mở đầu ----
 function paintProfile(){
@@ -1376,6 +1709,9 @@ function paintProfile(){
   const sw = $('#shirtSeg');
   sw.innerHTML = SHIRTS.map((c, i) => `<button data-shirt="${i}" style="--c:${c}" aria-label="Màu áo ${i+1}" aria-pressed="${i === profile.shirt}"></button>`).join('');
   sw.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { profile.shirt = +b.dataset.shirt; paintProfile(); }));
+  const sk = $('#skinSeg');
+  sk.innerHTML = SKINS.map((c, i) => `<button data-skin="${i}" style="--c:#${c.toString(16).padStart(6,'0')}" aria-label="Màu da ${i+1}" aria-pressed="${i === (profile.skin || 0)}"></button>`).join('');
+  sk.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { profile.skin = +b.dataset.skin; paintProfile(); }));
 }
 document.querySelectorAll('#styleSeg [data-style]').forEach(b => b.addEventListener('click', () => { profile.style = b.dataset.style; paintProfile(); }));
 $('#nameInput').addEventListener('input', e => { profile.name = e.target.value.slice(0, 24); });
@@ -1391,14 +1727,16 @@ function enter(){
   if(started) return;
   started = true; audio()?.resume?.();
   profile.name = $('#nameInput').value.trim().slice(0, 24); if(window.__NN_TEST !== true) store.set('profile', profile);
-  if(!avatar) avatar = new Avatar({style:profile.style, shirt:profile.shirt}, '');
+  if(!avatar) avatar = new Avatar({style:profile.style, shirt:profile.shirt, skin:profile.skin || 0}, '');
   $('#actions').hidden = false; paintActions(); paintPresence();
   if(view.third) pitch = -.18;
   $('#intro').hidden = true; $('#hud').hidden = false;
   hintEl.textContent = isTouch ? 'Kéo nửa trái để đi · kéo nửa phải để nhìn' : 'W A S D để đi · kéo chuột để nhìn quanh · E để tương tác';
   hintEl.hidden = false; paintToday();
   strike(audio()?.currentTime ?? 0, 330, .35);
-  setTimeout(() => toast('Tượng Đức Mẹ ở phía trước bên trái. Nhà Tạm ở cuối nhà nguyện. Tường ý nguyện ngay bên phải cửa vào.', 7000), 600);
+  setTimeout(() => toast('Tượng Đức Mẹ ở phía trước bên trái. Nhà Tạm ở cuối nhà nguyện. Đàng Thánh Giá dọc hai bên tường. Bấm "Hành hương" để đến các đền thánh.', 7000), 600);
+  if(litToday?.feast) setTimeout(() => toast(`Hôm nay: ${litToday.feast}. Khăn bàn thờ mang màu ${LIT_COLOR_NAME[litToday.color]}.`, 6000), 7800);
+  else if(new Date().getDay() === 5 || litToday?.season === 'Mùa Chay') setTimeout(() => toast('Hôm nay bạn có thể đi Đàng Thánh Giá: 14 chặng dọc hai bên tường, bắt đầu từ phía cung thánh bên trái.', 6000), 7800);
   canvas.focus({preventScroll:true});
   angelusCheck();
 }
@@ -1462,9 +1800,10 @@ function frame(){
   if(view.third && avatar){
     // camera sau lưng, lệch sang vai phải một chút
     const d = 2.6, cp = Math.cos(pitch), rx = Math.cos(yaw)*.3, rz = -Math.sin(yaw)*.3;
-    const cx = Math.max(-W/2+.2, Math.min(W/2-.2, ax + Math.sin(yaw)*cp*d + rx));
-    const cz = Math.max(ZB+.2, Math.min(ZF-.1, az + Math.cos(yaw)*cp*d + rz));
-    const cy = Math.max(.35, Math.min(H-.3, headY + .12 - Math.sin(pitch)*d));
+    const inside = world === 'chapel';
+    const cx = inside ? Math.max(-W/2+.2, Math.min(W/2-.2, ax + Math.sin(yaw)*cp*d + rx)) : ax + Math.sin(yaw)*cp*d + rx;
+    const cz = inside ? Math.max(ZB+.2, Math.min(ZF-.1, az + Math.cos(yaw)*cp*d + rz)) : az + Math.cos(yaw)*cp*d + rz;
+    const cy = Math.max(.35, Math.min(inside ? H-.3 : 30, headY + .12 - Math.sin(pitch)*d));
     camera.position.set(cx, cy, cz); camera.lookAt(ax + rx, headY + .02, az + rz);
   }else{
     const sway = avatar && avatar.state.pose !== 'stand' ? 0 : Math.sin(bob)*.025;
@@ -1503,6 +1842,7 @@ function boot(data){
 window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
 
 // Chế độ tự kiểm tra (chỉ bật trong tệp kiem-tra.html): tự đi qua các góc và mở bảng lần chuỗi
+if(window.__NN_TEST) window.__nn = {openStation, openRosary, rosaryNext, travelTo, onNet, rosary, remotes, startFollow, player, liturgyOf, openShrinePrayer, openPilgrimage, me, get world(){ return world; }, get dong(){ return dongLevel; }};
 if(window.__NN_TEST === 'net'){
   setTimeout(() => {
     const tag = Math.floor(Math.random()*90 + 10);
