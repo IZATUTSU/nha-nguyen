@@ -923,7 +923,7 @@ class Avatar{
 
     // ---- hông và thân ----
     const P = this.pelvis = new THREE.Group(); P.position.y = .91; this.root.add(P);
-    mesh(new THREE.SphereGeometry(.15, 16, 10), lower, P).scale.set(1, .62, .74);
+    mesh(new THREE.SphereGeometry(.15, 16, 10), aodai ? shirt : lower, P).scale.set(1, .62, .74);
     const spine = this.spine = new THREE.Group(); spine.position.y = .05; P.add(spine);
     const torsoPts = [[0,0],[.135,0],[.14,.08],[.128,.18],[.146,.3],[.168,.4],[.162,.455],[.118,.5],[.05,.522],[0,.524]].map(p => new THREE.Vector2(p[0], p[1]));
     this.torso = mesh(new THREE.LatheGeometry(torsoPts, 24), shirt, spine); this.torso.scale.set(1, 1, .68);
@@ -952,12 +952,13 @@ class Avatar{
       mesh(new THREE.SphereGeometry(.022, 10, 8), blush, neck, sx*.062, .098, .088).scale.set(1, .6, .3);
     }
     // ---- tóc ----
-    const cap = mesh(new THREE.SphereGeometry(.12, 22, 14, 0, Math.PI*2, 0, Math.PI*.52), hairM, neck, 0, .145, -.006); cap.rotation.x = -.22;
+    const cap = mesh(new THREE.SphereGeometry(.121, 22, 14, 0, Math.PI*2, 0, Math.PI*.44), hairM, neck, 0, .158, -.012); cap.rotation.x = -.42;
+    mesh(new THREE.SphereGeometry(.118, 20, 12, 0, Math.PI*2, Math.PI*.3, Math.PI*.35), hairM, neck, 0, .135, -.03).rotation.x = -1.15;   // tóc sau gáy
     if(female){
-      mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, 0, .2, .05).scale.set(1.05, .38, .7);                 // mái
+      mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, 0, .222, .045).scale.set(1.05, .3, .66);                 // mái
       const back = mesh(new THREE.CapsuleGeometry(.1, .2, 6, 14), hairM, neck, 0, .02, -.065); back.scale.set(1.12, 1, .55);   // tóc dài
     }else{
-      const fringe = mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, .02, .215, .045); fringe.scale.set(1.08, .34, .72); fringe.rotation.z = -.18;
+      const fringe = mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, .02, .228, .04); fringe.scale.set(1.08, .28, .7); fringe.rotation.z = -.18;
       for(const sx of [-1,1]) mesh(new THREE.SphereGeometry(.05, 10, 8), hairM, neck, sx*.095, .16, -.02).scale.set(.45, 1, 1);
     }
     if(style === 'nu'){
@@ -969,7 +970,7 @@ class Avatar{
     if(aodai){   // áo dài: cổ đứng và hai tà trước sau
       mesh(new THREE.CylinderGeometry(.052, .058, .07, 16, 1, true), std({color:shirtCol, roughness:.7, side:THREE.DoubleSide}), spine, 0, .55, 0);
       const flapM = std({color:shirtCol, roughness:.7, side:THREE.DoubleSide});
-      const flapGeo = new THREE.PlaneGeometry(.29, .84, 1, 6);
+      const flapGeo = new THREE.PlaneGeometry(.335, .86, 1, 6);
       { const pos = flapGeo.attributes.position; for(let i=0;i<pos.count;i++){ const y = pos.getY(i); pos.setX(i, pos.getX(i)*(1 + (.42 - y)*.18)); } }   // tà xoè nhẹ về phía dưới
       this.flapF = new THREE.Group(); this.flapF.position.set(0, -.02, .078); P.add(this.flapF);
       mesh(flapGeo, flapM, this.flapF, 0, -.42, 0);
