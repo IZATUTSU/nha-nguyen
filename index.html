@@ -1307,14 +1307,23 @@ function setPose(pose, opts = {}){
   }
   paintActions();
 }
+// Chọn hàng ghế ngay SAU LƯNG người đang đứng (người ngồi quay mặt về cung thánh, tức về phía -z).
+// Đứng trong khoảng trống giữa hai hàng thì ngồi xuống hàng phía sau, không phải hàng trước mặt.
 function nearestPew(maxD){
-  let best = null, bd = maxD;
+  let best = null, bd = 1e9;
   for(const z of pewZ) for(const s of [-1,1]){
-    const cx = s*2.8, sx = Math.max(cx-1.55, Math.min(cx+1.55, player.x)), d = Math.hypot(sx - player.x, z - player.z);
-    if(d < bd){ bd = d; best = {x:sx, z, key:z + '|' + s}; }
+    const cx = s*2.8, sx = Math.max(cx-1.55, Math.min(cx+1.55, player.x)), lat = Math.abs(sx - player.x);
+    if(lat > maxD) continue;
+    const rel = z - player.z;                 // > 0: mặt ghế ở sau lưng
+    if(rel < -.4 || rel > 1.1) continue;      // hàng trước mặt hoặc quá xa phía sau thì bỏ qua
+    const score = Math.max(0, rel) + lat;
+    if(score < bd){ bd = score; best = {x:sx, z, key:z + '|' + s, row:pewZ.length - pewZ.indexOf(z), side:s}; }
   }
   return best;
 }
+// ô sáng trên mặt ghế cho biết sẽ ngồi chỗ nào
+const seatMark = new THREE.Mesh(new THREE.PlaneGeometry(.5, .36), new THREE.MeshBasicMaterial({color:0xe8b257, transparent:true, opacity:.4, depthWrite:false}));
+seatMark.rotation.x = -Math.PI/2; seatMark.visible = false; scene.add(seatMark);
 function doSit(){
   if(!avatar) return;
   if(avatar.state.pose === 'sit'){ setPose('stand'); return; }
@@ -1437,7 +1446,8 @@ function findNearest(){
       const d = Math.hypot(p.x - player.x, p.z - player.z);
       if(d < bd || !best || d < .7){
         const key = p.key;
-        if(!pewIts[key]) pewIts[key] = {name:'Hàng ghế', x:0, z:0, r:1,
+        seatMark.position.set(p.x, .505, p.z + .04); seatMark.visible = true;
+        if(!pewIts[key]) pewIts[key] = {name:`Hàng ghế số ${p.row} ${p.side < 0 ? 'bên trái' : 'bên phải'} (tính từ cung thánh)`, x:0, z:0, r:1,
           actions:[{label:'Ngồi', run:() => doSit()}, {label:'Quỳ ở bục quỳ', run:() => doKneel()}]};
         best = pewIts[key];
       }
@@ -1448,6 +1458,7 @@ function findNearest(){
 const pewIts = {};
 let hintSeen = false;
 function updatePrompt(){
+  seatMark.visible = false;
   const it = uiOpen ? null : findNearest();
   if(it === current) return;
   current = it;
