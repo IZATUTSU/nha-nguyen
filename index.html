@@ -890,6 +890,8 @@ const SKINS = [0xe9c6a2, 0xd6a47c, 0xb7835f];
 const shadowTex = glowTex('rgba(0,0,0,.6)', 'rgba(0,0,0,.28)');
 const POSE_PY = {stand:.91, sit:.575, kneel:.46};
 const EYE_MAT = new THREE.MeshStandardMaterial({color:0x1a1210, roughness:.4});
+const EYE_WHITE = new THREE.MeshStandardMaterial({color:0xf7f4ee, roughness:.35});
+const EYE_SHINE = new THREE.MeshBasicMaterial({color:0xffffff});
 const BEAD_MAT = new THREE.MeshStandardMaterial({color:0xe8d9b5, roughness:.4, metalness:.3, emissive:0x3a2a10});   // độ cao hông theo tư thế
 function labelSprite(text){
   const c = document.createElement('canvas'); c.width = 512; c.height = 96; const g = c.getContext('2d');
@@ -908,60 +910,96 @@ class Avatar{
   constructor(look = {}, name = ''){
     const style = ['nam','nu','aodai'].includes(look.style) ? look.style : 'nam', female = style !== 'nam', aodai = style === 'aodai';
     const shirtCol = new THREE.Color(SHIRTS[look.shirt ?? 0] || SHIRTS[0]);
-    const skin = std({color:SKINS[look.skin] ?? SKINS[0], roughness:.7});
-    const shirt = std({color:shirtCol, roughness:.85});
+    const skinHex = SKINS[look.skin] ?? SKINS[0];
+    const skin = std({color:skinHex, roughness:.62});
+    const skinDark = std({color:new THREE.Color(skinHex).multiplyScalar(.9), roughness:.62});
+    const shirt = std({color:shirtCol, roughness:.82});
     const lower = std({color: aodai ? 0xf4f1ea : female ? shirtCol.clone().multiplyScalar(.78) : 0x2b2f3a, roughness:.85, side:THREE.DoubleSide});
-    const hairM = std({color:0x1c1511, roughness:.9}), shoe = std({color:0x161616, roughness:.6});
+    const hairM = std({color: female ? 0x241a14 : 0x1c1511, roughness:.55});
+    const shoe = std({color: female ? 0x5a3a2a : 0x1a1a1c, roughness:.45});
+    const mesh = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
     this.root = new THREE.Group();
+    this.seed = Math.random()*10; this.time = this.seed; this.blinkAt = 1 + Math.random()*3;
+
+    // ---- hông và thân ----
     const P = this.pelvis = new THREE.Group(); P.position.y = .91; this.root.add(P);
-    P.add(new THREE.Mesh(new THREE.BoxGeometry(.3,.16,.18), lower));
-    const spine = this.spine = new THREE.Group(); spine.position.y = .06; P.add(spine);
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.15,.26,4,12), shirt); torso.position.y = .26; torso.scale.set(1.05,1,.72); spine.add(torso);
-    const neck = this.neck = new THREE.Group(); neck.position.y = .54; spine.add(neck);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(.105,18,14), skin); head.position.y = .12; neck.add(head);
-    for(const sx of [-1,1]){   // mắt và lông mày
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(.014,8,6), EYE_MAT); eye.position.set(sx*.037,.136,.1); neck.add(eye);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(.034,.007,.01), hairM); brow.position.set(sx*.038,.165,.098); brow.rotation.z = sx*-.12; neck.add(brow);
+    mesh(new THREE.SphereGeometry(.15, 16, 10), lower, P).scale.set(1, .62, .74);
+    const spine = this.spine = new THREE.Group(); spine.position.y = .05; P.add(spine);
+    const torsoPts = [[0,0],[.135,0],[.14,.08],[.128,.18],[.146,.3],[.168,.4],[.162,.455],[.118,.5],[.05,.522],[0,.524]].map(p => new THREE.Vector2(p[0], p[1]));
+    this.torso = mesh(new THREE.LatheGeometry(torsoPts, 24), shirt, spine); this.torso.scale.set(1, 1, .68);
+    for(const sx of [-1,1]) mesh(new THREE.SphereGeometry(.058, 12, 10), shirt, spine, sx*.165, .44, 0);
+    if(style === 'nam'){
+      mesh(new THREE.TorusGeometry(.133, .012, 6, 28), std({color:0x3a2616, roughness:.6}), spine, 0, .02, 0).rotation.x = Math.PI/2;
+      const col = mesh(new THREE.CylinderGeometry(.06, .085, .05, 16, 1, true), std({color:shirtCol.clone().multiplyScalar(1.08), roughness:.8, side:THREE.DoubleSide}), spine, 0, .505, .005);
+      col.scale.z = .8;
     }
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(.112,18,12,0,Math.PI*2,0,Math.PI*.5), hairM); hair.position.set(0,.135,-.012); hair.rotation.x = -.28; neck.add(hair);
+    // ---- cổ và đầu ----
+    mesh(new THREE.CylinderGeometry(.042, .048, .09, 12), skin, spine, 0, .55, 0);
+    const neck = this.neck = new THREE.Group(); neck.position.y = .56; spine.add(neck);
+    mesh(new THREE.SphereGeometry(.112, 24, 18), skin, neck, 0, .13, 0).scale.set(.97, 1.08, 1);
+    for(const sx of [-1,1]) mesh(new THREE.SphereGeometry(.024, 8, 6), skinDark, neck, sx*.108, .125, -.005).scale.set(.5, 1, .8);   // tai
+    mesh(new THREE.SphereGeometry(.016, 8, 6), skinDark, neck, 0, .113, .11).scale.set(.8, 1, .9);                                   // mũi
+    mesh(new THREE.BoxGeometry(.034, .006, .006), std({color:0x9a5a50, roughness:.6}), neck, 0, .078, .102);                       // miệng
+    const blush = new THREE.MeshStandardMaterial({color:0xe88f86, transparent:true, opacity:.28, roughness:.8, depthWrite:false});
+    this.eyes = [];
+    for(const sx of [-1,1]){
+      const eye = new THREE.Group(); eye.position.set(sx*.04, .142, .094); neck.add(eye);
+      mesh(new THREE.SphereGeometry(.019, 12, 10), EYE_WHITE, eye).scale.set(1, .85, .6);
+      mesh(new THREE.SphereGeometry(.011, 10, 8), EYE_MAT, eye, 0, -.001, .009);
+      mesh(new THREE.SphereGeometry(.004, 6, 4), EYE_SHINE, eye, .004, .004, .017);
+      this.eyes.push(eye);
+      const brow = mesh(new THREE.BoxGeometry(.036, .007, .01), hairM, neck, sx*.041, .173, .099); brow.rotation.z = sx*-.14;
+      mesh(new THREE.SphereGeometry(.022, 10, 8), blush, neck, sx*.062, .098, .088).scale.set(1, .6, .3);
+    }
+    // ---- tóc ----
+    const cap = mesh(new THREE.SphereGeometry(.12, 22, 14, 0, Math.PI*2, 0, Math.PI*.52), hairM, neck, 0, .145, -.006); cap.rotation.x = -.22;
     if(female){
-      const back = new THREE.Mesh(new THREE.BoxGeometry(.2,.3,.06), hairM); back.position.set(0,.01,-.08); neck.add(back);
+      mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, 0, .2, .05).scale.set(1.05, .38, .7);                 // mái
+      const back = mesh(new THREE.CapsuleGeometry(.1, .2, 6, 14), hairM, neck, 0, .02, -.065); back.scale.set(1.12, 1, .55);   // tóc dài
+    }else{
+      const fringe = mesh(new THREE.SphereGeometry(.1, 16, 10), hairM, neck, .02, .215, .045); fringe.scale.set(1.08, .34, .72); fringe.rotation.z = -.18;
+      for(const sx of [-1,1]) mesh(new THREE.SphereGeometry(.05, 10, 8), hairM, neck, sx*.095, .16, -.02).scale.set(.45, 1, 1);
     }
     if(style === 'nu'){
-      const veil = new THREE.Mesh(new THREE.SphereGeometry(.126,18,12,Math.PI*.95,Math.PI*1.1,0,Math.PI*.64), std({color:0xffffff, roughness:.6, transparent:true, opacity:.88, side:THREE.DoubleSide}));
-      veil.position.set(0,.13,-.012); neck.add(veil);
-      this.skirt = new THREE.Mesh(new THREE.CylinderGeometry(.16,.25,.5,18,1,true), lower); this.skirt.position.y = -.27; P.add(this.skirt);
+      const veil = mesh(new THREE.SphereGeometry(.134, 20, 14, Math.PI*.95, Math.PI*1.1, 0, Math.PI*.66),
+        std({color:0xffffff, roughness:.6, transparent:true, opacity:.86, side:THREE.DoubleSide}), neck, 0, .135, -.012);
+      const skirtPts = [[.15,0],[.165,-.08],[.2,-.25],[.245,-.44],[.255,-.5]].map(p => new THREE.Vector2(p[0], p[1]));
+      this.skirt = mesh(new THREE.LatheGeometry(skirtPts, 24), lower, P, 0, -.02, 0);
     }
     if(aodai){   // áo dài: cổ đứng và hai tà trước sau
-      const collar = new THREE.Mesh(new THREE.CylinderGeometry(.058,.064,.06,14,1,true), shirt); collar.position.y = .03; neck.add(collar);
+      mesh(new THREE.CylinderGeometry(.052, .058, .07, 16, 1, true), std({color:shirtCol, roughness:.7, side:THREE.DoubleSide}), spine, 0, .55, 0);
       const flapM = std({color:shirtCol, roughness:.7, side:THREE.DoubleSide});
-      this.flapF = new THREE.Group(); this.flapF.position.set(0,-.02,.075); P.add(this.flapF);
-      const ff = new THREE.Mesh(new THREE.PlaneGeometry(.29,.82), flapM); ff.position.y = -.41; this.flapF.add(ff);
-      this.flapB = new THREE.Group(); this.flapB.position.set(0,-.02,-.085); P.add(this.flapB);
-      this.flapB.add(ff.clone());
+      const flapGeo = new THREE.PlaneGeometry(.29, .84, 1, 6);
+      { const pos = flapGeo.attributes.position; for(let i=0;i<pos.count;i++){ const y = pos.getY(i); pos.setX(i, pos.getX(i)*(1 + (.42 - y)*.18)); } }   // tà xoè nhẹ về phía dưới
+      this.flapF = new THREE.Group(); this.flapF.position.set(0, -.02, .078); P.add(this.flapF);
+      mesh(flapGeo, flapM, this.flapF, 0, -.42, 0);
+      this.flapB = new THREE.Group(); this.flapB.position.set(0, -.02, -.088); P.add(this.flapB);
+      mesh(flapGeo, flapM, this.flapB, 0, -.42, 0);
     }
+    // ---- tay ----
     const arm = side => {
-      const sh = new THREE.Group(); sh.position.set(side*.2,.47,0); spine.add(sh);
-      const up = new THREE.Mesh(new THREE.CapsuleGeometry(.05,.2,4,8), shirt); up.position.y = -.14; sh.add(up);
-      const el = new THREE.Group(); el.position.y = -.28; sh.add(el);
-      const fo = new THREE.Mesh(new THREE.CapsuleGeometry(.042,.18,4,8), shirt); fo.position.y = -.12; el.add(fo);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(.045,10,8), skin); hand.position.y = -.27; el.add(hand);
+      const sh = new THREE.Group(); sh.position.set(side*.19, .45, 0); spine.add(sh);
+      mesh(new THREE.CapsuleGeometry(.047, .19, 4, 10), shirt, sh, 0, -.13, 0);
+      const el = new THREE.Group(); el.position.y = -.27; sh.add(el);
+      mesh(new THREE.CapsuleGeometry(.04, .17, 4, 10), female && !aodai ? skin : shirt, el, 0, -.11, 0);
+      const hand = mesh(new THREE.SphereGeometry(.043, 12, 10), skin, el, 0, -.255, .005); hand.scale.set(.78, 1.12, .56);
+      mesh(new THREE.CapsuleGeometry(.012, .03, 3, 6), skin, el, -side*.028, -.24, .02).rotation.z = side*.5;   // ngón cái
       return {sh, el};
     };
+    // ---- chân ----
     const leg = side => {
-      const hip = new THREE.Group(); hip.position.set(side*.09,-.04,0); P.add(hip);
-      const th = new THREE.Mesh(new THREE.CapsuleGeometry(.07,.3,4,8), lower); th.position.y = -.21; hip.add(th);
+      const hip = new THREE.Group(); hip.position.set(side*.085, -.04, 0); P.add(hip);
+      mesh(new THREE.CapsuleGeometry(.068, .3, 4, 10), lower, hip, 0, -.21, 0);
       const kn = new THREE.Group(); kn.position.y = -.42; hip.add(kn);
-      const sn = new THREE.Mesh(new THREE.CapsuleGeometry(.055,.3,4,8), lower); sn.position.y = -.2; kn.add(sn);
-      const ft = new THREE.Mesh(new THREE.BoxGeometry(.09,.06,.22), shoe); ft.position.set(0,-.42,.05); kn.add(ft);
+      mesh(new THREE.CapsuleGeometry(.054, .3, 4, 10), aodai ? lower : (female ? skin : lower), kn, 0, -.2, 0);
+      const foot = mesh(new THREE.CapsuleGeometry(.046, .12, 4, 10), shoe, kn, 0, -.425, .045); foot.rotation.x = Math.PI/2; foot.scale.set(1, 1, .72);
       return {hip, kn};
     };
     this.lArm = arm(1); this.rArm = arm(-1); this.lLeg = leg(1); this.rLeg = leg(-1);   // mặt trước là +z, bên trái là +x
-    this.beads = new THREE.Mesh(new THREE.TorusGeometry(.085,.009,6,28), BEAD_MAT); this.beads.position.set(0,.14,.21); this.beads.rotation.x = .25;
-    this.beads.visible = false; spine.add(this.beads);
-    const sh = new THREE.Mesh(new THREE.PlaneGeometry(.8,.8), new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false}));
+    this.beads = mesh(new THREE.TorusGeometry(.085, .009, 6, 28), BEAD_MAT, spine, 0, .14, .21); this.beads.rotation.x = .25; this.beads.visible = false;
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false}));
     sh.rotation.x = -Math.PI/2; sh.position.y = .015; this.root.add(sh);
-    if(name){ this.label = labelSprite(name); this.label.position.y = .42; neck.add(this.label); }
+    if(name){ this.label = labelSprite(name); this.label.position.y = .44; neck.add(this.label); }
     this.state = {pose:'stand', py:null, folded:false, gestureAt:-1};
     this.j = {py:.91, sp:0, nk:0, lsx:0, lsz:.08, lex:-.12, rsx:0, rsz:-.08, rex:-.12, lhx:0, lkx:0, rhx:0, rkx:0};
     this.phase = 0; this.walk = 0; this.speed = 0;
@@ -977,9 +1015,9 @@ class Avatar{
       T.sp = .06; T.nk = .2; T.lkx = T.rkx = 1.57;
     }else{
       const sn = Math.sin(ph);
-      T.lhx = -.5*sn*w; T.rhx = .5*sn*w;
-      T.lkx = .7*w*Math.max(0, Math.cos(ph)); T.rkx = .7*w*Math.max(0, -Math.cos(ph));
-      T.lsx = .38*sn*w; T.rsx = -.38*sn*w; T.sp = .04*w;
+      T.lhx = -.55*sn*w; T.rhx = .55*sn*w;
+      T.lkx = .8*w*Math.max(0, Math.cos(ph)) + .06; T.rkx = .8*w*Math.max(0, -Math.cos(ph)) + .06;
+      T.lsx = .42*sn*w; T.rsx = -.42*sn*w; T.lex = -.12 - .3*w*Math.max(0, sn); T.rex = -.12 - .3*w*Math.max(0, -sn); T.sp = .05*w;
     }
     if(s.folded || s.pose === 'kneel'){ T.lsx = T.rsx = -.45; T.lsz = -.38; T.rsz = .38; T.lex = T.rex = -1.85; }
     if(s.gestureAt >= 0){
@@ -996,17 +1034,39 @@ class Avatar{
     return T;
   }
   update(dt, now){
+    this.time += dt;
     this.walk += (Math.min(1, this.speed/1.6) - this.walk)*Math.min(1, dt*8);
     this.phase += this.speed*dt*4.4;
-    const T = this.targets(now), k = 1 - Math.exp(-dt*9), j = this.j;
+    const T = this.targets(now), k = 1 - Math.exp(-dt*9), j = this.j, s = this.state, w = this.walk, tm = this.time;
     for(const key in T) j[key] += (T[key] - j[key])*k;
-    this.pelvis.position.y = j.py; this.spine.rotation.x = j.sp; this.neck.rotation.x = j.nk;
-    this.lArm.sh.rotation.set(j.lsx, 0, j.lsz); this.lArm.el.rotation.x = j.lex;
-    this.rArm.sh.rotation.set(j.rsx, 0, j.rsz); this.rArm.el.rotation.x = j.rex;
+    const still = s.pose === 'stand' && w < .25 && s.gestureAt < 0;
+    const praying = s.folded || s.pose !== 'stand';
+    // nhịp thở, dồn trọng tâm, nhún khi bước
+    const breath = Math.sin(tm*1.7);
+    this.torso.scale.set(1 + breath*.012, 1 + breath*.01, .68 + breath*.012);
+    const sway = still ? Math.sin(tm*.55)*.03 : 0;
+    this.pelvis.position.y = j.py + (s.pose === 'stand' ? Math.abs(Math.sin(this.phase))*.028*w - .012*w : 0);
+    this.pelvis.rotation.set(0, -Math.sin(this.phase)*.08*w, sway);
+    this.spine.rotation.set(j.sp + breath*.008, Math.sin(this.phase)*.13*w, -sway*.6);
+    // đầu nhìn quanh nhẹ nhàng; khi cầu nguyện thì gần như yên
+    const look = praying ? .06 : .28*(1 - w);
+    this.neck.rotation.set(j.nk + (praying ? 0 : Math.sin(tm*.37 + this.seed)*.05), Math.sin(tm*.29 + this.seed*2)*look, sway*.4);
+    // chớp mắt mỗi 2–5 giây
+    if(tm > this.blinkAt){ this.blinkAt = tm + 2 + Math.random()*3; this.blinkEnd = tm + .13; }
+    const eyeY = tm < (this.blinkEnd || 0) ? .12 : 1;
+    for(const e of this.eyes) e.scale.y += (eyeY - e.scale.y)*Math.min(1, dt*40);
+    // tay đung đưa theo nhịp thở khi đứng yên
+    const armIdle = still ? breath*.02 : 0;
+    this.lArm.sh.rotation.set(j.lsx + armIdle, 0, j.lsz + armIdle*.5); this.lArm.el.rotation.x = j.lex;
+    this.rArm.sh.rotation.set(j.rsx - armIdle, 0, j.rsz - armIdle*.5); this.rArm.el.rotation.x = j.rex;
     this.lLeg.hip.rotation.x = j.lhx; this.lLeg.kn.rotation.x = j.lkx;
     this.rLeg.hip.rotation.x = j.rhx; this.rLeg.kn.rotation.x = j.rkx;
-    if(this.flapF){ const hips = (j.lhx + j.rhx)/2; this.flapF.rotation.x = Math.min(0, hips)*.95; this.flapB.rotation.x = Math.max(0, -hips)*.35; }
-    if(this.skirt) this.skirt.scale.y = 1 - Math.min(.5, Math.abs(j.lhx)*.32);
+    if(this.flapF){
+      const hips = (j.lhx + j.rhx)/2, flutter = Math.sin(this.phase*2)*.08*w + Math.sin(tm*1.3)*.015;
+      this.flapF.rotation.x = Math.min(0, hips)*.95 - .1*w + flutter;
+      this.flapB.rotation.x = Math.max(0, -hips)*.35 + .14*w - flutter;
+    }
+    if(this.skirt){ this.skirt.scale.y = 1 - Math.min(.5, Math.abs(j.lhx)*.32); this.skirt.rotation.x = Math.sin(this.phase)*.05*w; }
   }
   dispose(){ scene.remove(this.root); this.root.traverse(o => o.geometry?.dispose?.()); }
 }
@@ -1119,7 +1179,8 @@ async function prayFor(it){
   }else saveIntentions();
 }
 
-if(NET_CONFIG.supabaseUrl && NET_CONFIG.supabaseKey) useSupabaseNet(); else useLocalNet();
+const SHOWROOM = location.hash === '#xem-nhan-vat';   // phòng xem nhân vật: không kết nối mạng
+if(NET_CONFIG.supabaseUrl && NET_CONFIG.supabaseKey && !SHOWROOM) useSupabaseNet(); else useLocalNet();
 
 function onNet(m){
   if(!m || typeof m.id !== 'string' || m.id === me.id) return;
@@ -1843,6 +1904,31 @@ function boot(data){
 window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
 
 // Chế độ tự kiểm tra (chỉ bật trong tệp kiem-tra.html): tự đi qua các góc và mở bảng lần chuỗi
+if(SHOWROOM){
+  // 6 nhân vật mẫu trước cung thánh: đứng, đi, quỳ, làm dấu, chắp tay
+  const cast = [
+    {id:'m1', name:'Giuse (đứng)', look:{style:'nam', shirt:0, skin:0}, x:-2.2, pose:'stand'},
+    {id:'m2', name:'Maria (khăn voan)', look:{style:'nu', shirt:1, skin:1}, x:-1.3, pose:'stand', folded:true},
+    {id:'m3', name:'Thảo (áo dài)', look:{style:'aodai', shirt:4, skin:0}, x:-.4, pose:'stand'},
+    {id:'m4', name:'Phêrô (quỳ)', look:{style:'nam', shirt:2, skin:2}, x:.5, pose:'kneel', py:.46},
+    {id:'m5', name:'Anna (làm dấu)', look:{style:'aodai', shirt:5, skin:1}, x:1.4, pose:'stand', cross:true},
+    {id:'m6', name:'Minh (đi bộ)', look:{style:'nam', shirt:3, skin:1}, x:2.3, pose:'stand', walk:true}
+  ];
+  let k = 0;
+  setTimeout(() => {
+    view.third = false; paintView();
+    $('#nameInput').value = 'Người xem'; enter();
+    player.x = 0; player.z = -3.6; yaw = 0; pitch = -.06;
+    setInterval(() => {
+      k++;
+      for(const c of cast){
+        const z = c.walk ? -6.4 + Math.sin(k*.06)*.9 : -6.6;
+        onNet({id:c.id, name:c.name, look:c.look, p:[c.x, 0, z], ry: c.walk ? (Math.cos(k*.06) > 0 ? 0 : Math.PI) : 0,
+          pose:c.pose, py:c.py ?? null, folded:!!c.folded, ga: c.cross && k % 40 === 1 ? 0 : -1, w:'chapel'});
+      }
+    }, 100);
+  }, 600);
+}
 if(window.__NN_TEST) window.__nn = {openStation, openRosary, rosaryNext, travelTo, onNet, rosary, remotes, startFollow, player, liturgyOf, openShrinePrayer, openPilgrimage, me, get world(){ return world; }, get dong(){ return dongLevel; }};
 if(window.__NN_TEST === 'net'){
   setTimeout(() => {
