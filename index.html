@@ -152,6 +152,13 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatches button{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);padding:0;background:var(--c)}
 .swatches button[aria-pressed="true"]{border-color:var(--candle);box-shadow:0 0 0 3px var(--night) inset}
+.group{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.group h3{margin:0;font-family:var(--font-display);font-size:1.05rem}
+.list li.who{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.list li.who > div{display:grid;gap:2px;min-width:0}
+.list li.who b{overflow-wrap:anywhere}
+.follow-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;background:rgba(111,143,214,.16);border:1px solid rgba(111,143,214,.4);border-radius:12px;padding:10px 12px;font-size:.9rem}
+.dongtam{font-size:.8rem;color:var(--candle);letter-spacing:.04em}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){#sheet,#adore .ring{animation:none}}
 </style>
@@ -601,6 +608,12 @@ function refreshRack(animateIndex = -1){
 }
 refreshRack();
 
+// ---- ánh sáng Đồng tâm quanh tượng Đức Mẹ ----
+const dongTam = new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex('rgba(255,238,200,.95)','rgba(255,205,130,.28)'), blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0}));
+dongTam.position.set(MARY.x, 2.55, MARY.z+.05); dongTam.scale.set(2.4, 2.4, 1); scene.add(dongTam);
+const dongLight = new THREE.PointLight(0xffe2a8, 0, 7, 2); dongLight.position.set(MARY.x+.4, 2.4, MARY.z+.9); scene.add(dongLight);
+let dongLevel = 0;
+
 // ---- chuông Truyền Tin (bên phải phía trước) ----
 const BELL = {x:4.7, z:-7.7};
 for(const e of [-1,1]) box(.12, 2.6, .12, M.darkWood, BELL.x+e*.55, 1.3, BELL.z);
@@ -659,7 +672,8 @@ scene.add(dust); dust.visible = !reduceMotion;
 const SHIRTS = ['#eeeae2','#4d6fb8','#7a5236','#6d7280','#7d2430','#3f6b4e'];
 const SKINS = [0xe9c6a2, 0xd6a47c, 0xb7835f];
 const shadowTex = glowTex('rgba(0,0,0,.6)', 'rgba(0,0,0,.28)');
-const POSE_PY = {stand:.91, sit:.575, kneel:.46};   // độ cao hông theo tư thế
+const POSE_PY = {stand:.91, sit:.575, kneel:.46};
+const BEAD_MAT = new THREE.MeshStandardMaterial({color:0xe8d9b5, roughness:.4, metalness:.3, emissive:0x3a2a10});   // độ cao hông theo tư thế
 function labelSprite(text){
   const c = document.createElement('canvas'); c.width = 512; c.height = 96; const g = c.getContext('2d');
   g.font = '600 38px "Be Vietnam Pro","Segoe UI",sans-serif';
@@ -711,6 +725,8 @@ class Avatar{
       return {hip, kn};
     };
     this.lArm = arm(1); this.rArm = arm(-1); this.lLeg = leg(1); this.rLeg = leg(-1);   // mặt trước là +z, bên trái là +x
+    this.beads = new THREE.Mesh(new THREE.TorusGeometry(.085,.009,6,28), BEAD_MAT); this.beads.position.set(0,.14,.21); this.beads.rotation.x = .25;
+    this.beads.visible = false; spine.add(this.beads);
     const sh = new THREE.Mesh(new THREE.PlaneGeometry(.8,.8), new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false}));
     sh.rotation.x = -Math.PI/2; sh.position.y = .015; this.root.add(sh);
     if(name){ this.label = labelSprite(name); this.label.position.y = .42; neck.add(this.label); }
@@ -874,13 +890,14 @@ if(NET_CONFIG.supabaseUrl && NET_CONFIG.supabaseKey) useSupabaseNet(); else useL
 
 function onNet(m){
   if(!m || typeof m.id !== 'string' || m.id === me.id) return;
-  if(m.bye){ const r = remotes.get(m.id); if(r){ r.av.dispose(); remotes.delete(m.id); paintPresence(); } return; }
+  if(m.bye){ const r = remotes.get(m.id); if(r){ r.av.dispose(); remotes.delete(m.id); paintPresence(); remoteGone(m.id, r); } return; }
   if(!Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
   const now = performance.now();
   let r = remotes.get(m.id);
   if(!r){
     if(remotes.size >= 40) return;   // giới hạn số người hiển thị để máy yếu không bị chậm
-    r = {av:new Avatar(m.look || {}, String(m.name || 'Khách hành hương').slice(0, 24)), vel:0};
+    const nm = String(m.name || 'Khách hành hương').slice(0, 24);
+    r = {av:new Avatar(m.look || {}, nm), vel:0, name:nm, ro:null};
     r.av.root.position.set(m.p[0], m.p[1], m.p[2]); r.av.root.rotation.y = m.ry || 0;
     r.tx = m.p[0]; r.tz = m.p[2]; r.last = now;
     remotes.set(m.id, r); paintPresence();
@@ -890,25 +907,35 @@ function onNet(m){
   r.tx = m.p[0]; r.ty = m.p[1]; r.tz = m.p[2]; r.try = m.ry || 0; r.last = now;
   const s = r.av.state; s.pose = ['stand','sit','kneel'].includes(m.pose) ? m.pose : 'stand'; s.py = Number.isFinite(m.py) ? m.py : null; s.folded = !!m.folded;
   if(m.ga >= 0 && s.gestureAt < 0) s.gestureAt = now - m.ga;
+  const ro = (Array.isArray(m.ro) && MYSTERIES[m.ro[0]] && Number.isInteger(m.ro[1]) && m.ro[1] >= 0 && m.ro[1] < 5
+              && Number.isInteger(m.ro[2]) && m.ro[2] >= 0 && m.ro[2] <= BEADS.length)
+    ? [m.ro[0], m.ro[1], m.ro[2], typeof m.ro[3] === 'string' ? m.ro[3].slice(0, 12) : null] : null;
+  const changedRo = JSON.stringify(ro) !== JSON.stringify(r.ro);
+  r.ro = ro; r.av.beads.visible = !!ro;
+  if(changedRo){
+    if(rosary.active && rosary.follow === m.id) syncFollow(r);
+    paintRosaryGroup();
+  }
 }
 // Gửi khi có thay đổi (tối đa 5 lần/giây), còn khi ngồi yên chỉ gửi 3 giây một lần, để tiết kiệm hạn mức miễn phí.
 let lastSent = 0, lastSig = '';
 function sendNet(){
   if(net.mode === 'off' || !started || !avatar) return;
   const a = avatar.root.position, s = avatar.state, now = performance.now();
-  const sig = [a.x.toFixed(2), a.z.toFixed(2), avatar.root.rotation.y.toFixed(2), s.pose, s.folded, s.gestureAt >= 0].join('|');
+  const ro = myRo();
+  const sig = [a.x.toFixed(2), a.z.toFixed(2), avatar.root.rotation.y.toFixed(2), s.pose, s.folded, s.gestureAt >= 0, JSON.stringify(ro)].join('|');
   const changed = sig !== lastSig;
   if(!(changed && now - lastSent >= 200) && now - lastSent < 3000) return;
   lastSig = sig; lastSent = now;
   net.send({id:me.id, name:profile.name || 'Khách hành hương', look:{style:profile.style, shirt:profile.shirt},
     p:[+a.x.toFixed(3), +a.y.toFixed(3), +a.z.toFixed(3)], ry:+avatar.root.rotation.y.toFixed(3), pose:s.pose, py:s.py, folded:s.folded,
-    ga:s.gestureAt >= 0 ? Math.round(now - s.gestureAt) : -1});
+    ga:s.gestureAt >= 0 ? Math.round(now - s.gestureAt) : -1, ro});
 }
 setInterval(sendNet, 100);
 addEventListener('pagehide', () => net.send({id:me.id, bye:true}));
 function updateRemotes(dt, now){
   for(const [id, r] of remotes){
-    if(now - r.last > 9000){ r.av.dispose(); remotes.delete(id); paintPresence(); continue; }
+    if(now - r.last > 9000){ r.av.dispose(); remotes.delete(id); paintPresence(); remoteGone(id, r); continue; }
     if(now - r.last > 450) r.vel *= Math.exp(-dt*6);
     const p = r.av.root.position, k = Math.min(1, dt*7);
     r.av.speed = r.av.state.pose === 'stand' ? r.vel : 0;
@@ -1083,7 +1110,7 @@ function openSheet(title, sub, body){
   sheet.hidden = false; promptEl.hidden = true; current = null;
   $('#closeSheet').addEventListener('click', closeSheet);
 }
-function closeSheet(){ sheet.hidden = true; uiOpen = false; shared.redraw = null; rosary.active = false; current = null; canvas.focus({preventScroll:true}); }
+function closeSheet(){ sheet.hidden = true; uiOpen = false; shared.redraw = null; rosary.active = false; rosary.follow = null; current = null; canvas.focus({preventScroll:true}); }
 let toastTimer = 0;
 function toast(html, ms = 4200){
   const t = $('#toast'); t.innerHTML = html; t.hidden = false; clearTimeout(toastTimer);
@@ -1115,7 +1142,8 @@ function openCandle(){
 }
 
 // ---- Lần chuỗi Mân Côi ----
-const rosary = {active:false, set:DAY_SET[new Date().getDay()], m:0, i:0};
+const rosary = {active:false, set:DAY_SET[new Date().getDay()], m:0, i:0, follow:null, followName:''};
+const myRo = () => rosary.active ? [rosary.set, rosary.m, rosary.i, rosary.follow] : null;
 const BEADS = ['cha', ...Array(10).fill('mung'), 'sangdanh'];
 function openRosary(){
   rosary.active = true; rosary.i = 0;
@@ -1125,33 +1153,93 @@ function openRosary(){
 }
 function renderRosary(){
   const body = $('#rosaryBody'); if(!body) return;
-  const set = MYSTERIES[rosary.set];
+  const set = MYSTERIES[rosary.set], following = !!rosary.follow;
   const done = rosary.i >= BEADS.length;
   const p = done ? null : PRAYERS[BEADS[rosary.i]];
   body.innerHTML = `
+    ${following ? `<div class="follow-bar"><span>Đang đọc theo <b>${esc(rosary.followName)}</b>. Hạt sẽ tự chuyển theo người hướng dẫn.</span><button class="btn ghost small" id="leaveGroup">Rời nhóm</button></div>` : `
     <div class="seg" role="group" aria-label="Chọn sự">${Object.entries(MYSTERIES).map(([k, v]) => `<button data-set="${k}" aria-pressed="${k === rosary.set}">${v.name.replace('Năm ','')}</button>`).join('')}</div>
-    <div class="seg" role="group" aria-label="Chọn mầu nhiệm">${set.items.map((_, i) => `<button data-m="${i}" aria-pressed="${i === rosary.m}">${i+1}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Chọn mầu nhiệm">${set.items.map((_, i) => `<button data-m="${i}" aria-pressed="${i === rosary.m}">${i+1}</button>`).join('')}</div>`}
     <div class="meditation"><small>${set.name} · Mầu nhiệm ${rosary.m+1}</small>${ORD[rosary.m]} thì ta ngắm: ${set.items[rosary.m]}.</div>
+    <div class="dongtam" id="dongTamNote" aria-live="polite"></div>
     <div class="beads" aria-hidden="true">${BEADS.map((b, i) => `<span class="bead ${b !== 'mung' ? 'big' : ''} ${i < rosary.i ? 'done' : ''} ${i === rosary.i ? 'now' : ''}"></span>`).join('')}</div>
     <div class="count">${done ? 'Đã xong một chục' : (BEADS[rosary.i] === 'mung' ? `Kinh Kính Mừng ${rosary.i}/10` : p.title)}</div>
     ${done ? `
-      <div class="prayer"><h3>Xong mầu nhiệm thứ ${rosary.m+1}</h3><p>Bạn đã lần xong một chục kinh. Có thể tiếp tục mầu nhiệm kế tiếp hoặc dừng lại tại đây.</p></div>
-      <div class="row">${rosary.m < 4 ? '<button class="btn" id="nextMystery">Mầu nhiệm kế tiếp</button>' : ''}<button class="btn ghost" id="rosaryClose">Đóng</button></div>`
+      <div class="prayer"><h3>Xong mầu nhiệm thứ ${rosary.m+1}</h3><p>${following ? 'Nhóm đã lần xong một chục kinh. Người hướng dẫn có thể chuyển sang mầu nhiệm kế tiếp.' : 'Bạn đã lần xong một chục kinh. Có thể tiếp tục mầu nhiệm kế tiếp hoặc dừng lại tại đây.'}</p></div>
+      <div class="row">${rosary.m < 4 && !following ? '<button class="btn" id="nextMystery">Mầu nhiệm kế tiếp</button>' : ''}<button class="btn ghost" id="rosaryClose">Đóng</button></div>`
     : `
       <div class="prayer" aria-live="polite"><h3>${p.title}</h3><p>${p.text}</p></div>
-      <div class="row"><button class="btn" id="beadNext">Amen · hạt tiếp theo</button>${isTouch ? '' : '<span class="fine">hoặc nhấn phím cách</span>'}</div>`}`;
+      ${following ? '' : `<div class="row"><button class="btn" id="beadNext">Amen · hạt tiếp theo</button>${isTouch ? '' : '<span class="fine">hoặc nhấn phím cách</span>'}</div>`}`}
+    <div id="rosaryGroup"></div>`;
   body.querySelectorAll('[data-set]').forEach(b => b.addEventListener('click', () => { rosary.set = b.dataset.set; rosary.m = 0; rosary.i = 0; renderRosary(); }));
   body.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { rosary.m = +b.dataset.m; rosary.i = 0; renderRosary(); }));
   $('#beadNext')?.addEventListener('click', rosaryNext);
   $('#nextMystery')?.addEventListener('click', () => { rosary.m++; rosary.i = 0; renderRosary(); });
   $('#rosaryClose')?.addEventListener('click', closeSheet);
+  $('#leaveGroup')?.addEventListener('click', () => stopFollow());
+  paintRosaryGroup(); paintDongTamNote();
 }
 function rosaryNext(){
-  if(rosary.i >= BEADS.length) return;
+  if(rosary.follow || rosary.i >= BEADS.length) return;
   beadSound(BEADS[rosary.i] !== 'mung');
   rosary.i++;
   if(rosary.i >= BEADS.length){ note('rosary', 'decades'); }
   renderRosary();
+}
+// ---- Cùng lần chuỗi: xem ai đang lần, đọc theo người hướng dẫn ----
+function paintRosaryGroup(){
+  const el = $('#rosaryGroup'); if(!el || !rosary.active) return;
+  const others = [...remotes.entries()].filter(([, r]) => r.ro);
+  if(!others.length){ el.innerHTML = '<p class="fine">Chưa có ai khác đang lần chuỗi. Khi có người cùng lần, họ sẽ hiện ở đây để bạn đọc theo.</p>'; return; }
+  const followers = others.filter(([, r]) => r.ro[3] === me.id).length;
+  el.innerHTML = `<div class="group"><h3>Đang lần chuỗi cùng lúc</h3>${followers ? `<p class="fine" style="margin:0">${followers} người đang đọc theo bạn.</p>` : ''}
+    <ul class="list">${others.map(([id, r]) => {
+      const st = MYSTERIES[r.ro[0]], where = r.ro[2] >= BEADS.length ? 'đã xong một chục' : `hạt ${r.ro[2]+1}/${BEADS.length}`;
+      const action = id === rosary.follow ? '<span class="fine">Bạn đang đọc theo</span>'
+        : r.ro[3] === me.id ? '<span class="fine">Đang đọc theo bạn</span>'
+        : `<button class="btn ghost small" data-follow="${esc(id)}">Đọc theo</button>`;
+      return `<li class="who"><div><b>${esc(r.name)}</b><span class="fine">${st.name.replace('Năm ','')} · mầu nhiệm ${r.ro[1]+1} · ${where}</span></div>${action}</li>`;
+    }).join('')}</ul></div>`;
+  el.querySelectorAll('[data-follow]').forEach(b => b.addEventListener('click', () => startFollow(b.dataset.follow)));
+}
+function startFollow(id){
+  const r = remotes.get(id); if(!r || !r.ro) return;
+  rosary.follow = id; rosary.followName = r.name;
+  syncFollow(r, true);
+  toast(`Bạn đang đọc theo ${esc(r.name)}. Cùng nhau cầu nguyện.`);
+}
+function stopFollow(msg){
+  if(!rosary.follow) return;
+  rosary.follow = null; renderRosary();
+  if(msg) toast(msg);
+}
+function syncFollow(r, force){
+  if(!r.ro){ stopFollow(`${esc(r.name)} đã dừng lần chuỗi.`); return; }
+  const [set, m, i] = r.ro;
+  if(!force && set === rosary.set && m === rosary.m && i === rosary.i) return;
+  const wasDone = rosary.i >= BEADS.length;
+  if(set === rosary.set && m === rosary.m && i > rosary.i && rosary.i < BEADS.length) beadSound(BEADS[rosary.i] !== 'mung');
+  rosary.set = set; rosary.m = m; rosary.i = i;
+  if(!wasDone && i >= BEADS.length) note('rosary', 'decades');
+  renderRosary();
+}
+function remoteGone(id, r){
+  if(rosary.active && rosary.follow === id) stopFollow(`${esc(r.name)} đã rời nhà nguyện.`);
+  paintRosaryGroup();
+}
+// ---- Đồng tâm: khi từ 2 người cùng lần một mầu nhiệm, tượng Đức Mẹ sáng lên ----
+function dongTamCount(){
+  const groups = {}, add = ro => { if(ro){ const k = ro[0] + '|' + ro[1]; groups[k] = (groups[k] || 0) + 1; } };
+  const mine = myRo(); add(mine);
+  for(const r of remotes.values()) add(r.ro);
+  let max = 0; for(const k in groups) max = Math.max(max, groups[k]);
+  return {max, mine: mine ? groups[mine[0] + '|' + mine[1]] : 0};
+}
+let dongWas = 0;
+function paintDongTamNote(){
+  const el = $('#dongTamNote'); if(!el) return;
+  const {mine} = dongTamCount();
+  el.textContent = mine >= 2 ? `Đồng tâm · ${mine} người đang cùng suy ngắm mầu nhiệm này` : '';
 }
 
 // ---- Tường ý nguyện ----
@@ -1360,6 +1448,17 @@ function frame(){
     ax = r.position.x; az = r.position.z; headY = r.position.y + avatar.j.py + .72;
   }
   updateRemotes(dt, now);
+  if(avatar) avatar.beads.visible = rosary.active;
+  {
+    const {max, mine} = dongTamCount();
+    const target = max >= 2 ? Math.min(1, .5 + .15*(max - 2)) : 0;
+    dongLevel += (target - dongLevel)*Math.min(1, dt*1.2);
+    dongTam.material.opacity = dongLevel*(.75 + .25*Math.sin(t*1.3));
+    const sc = 2.2 + dongLevel*1.6; dongTam.scale.set(sc, sc, 1);
+    dongLight.intensity = dongLevel*12;
+    if(mine >= 2 && dongWas < 2){ const st = MYSTERIES[rosary.set]; toast(`Đồng tâm: ${mine} người đang cùng lần ${st.name}, mầu nhiệm ${rosary.m+1}.`); }
+    if(mine !== dongWas){ dongWas = mine; paintDongTamNote(); }
+  }
   if(view.third && avatar){
     // camera sau lưng, lệch sang vai phải một chút
     const d = 2.6, cp = Math.cos(pitch), rx = Math.cos(yaw)*.3, rz = -Math.sin(yaw)*.3;
@@ -1419,7 +1518,7 @@ if(window.__NN_TEST === true){
   const fakes = () => {
     onNet({id:'thu1', name:'Maria Lan (giả lập)', look:{style:'nu', shirt:1}, p:[-1.7,0,4.71], ry:Math.PI, pose:'sit', py:null, folded:false, ga:-1});
     onNet({id:'thu2', name:'Giuse Minh (giả lập)', look:{style:'nam', shirt:2}, p:[2.1,0,3.0], ry:Math.PI, pose:'kneel', py:.665, folded:true, ga:-1});
-    onNet({id:'thu3', name:'Têrêsa (giả lập)', look:{style:'nu', shirt:0}, p:[-3.7,0,-5.7], ry:Math.PI+.6, pose:'stand', py:null, folded:true, ga:-1});
+    onNet({id:'thu3', name:'Têrêsa (giả lập)', look:{style:'nu', shirt:0}, p:[-3.7,0,-5.7], ry:Math.PI+.6, pose:'stand', py:null, folded:true, ga:-1, ro:['sang', 0, 4, null]});
   };
   const steps = [
     ['Nhìn từ sau lưng nhân vật', () => { player.x = 0; player.z = 7.6; yaw = 0; pitch = -.15; }],
