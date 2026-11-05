@@ -722,20 +722,20 @@ applyLiturgy();
 
 // ---- Đàng Thánh Giá: 14 chặng trên hai bên tường ----
 const STATIONS = [
-  ['Chúa Giêsu bị kết án tử hình', 'Người vô tội chịu kết án bất công mà vẫn hiền lành. Xin cho con biết bình an khi bị hiểu lầm.'],
-  ['Chúa Giêsu vác Thánh Giá', 'Chúa đón nhận Thánh Giá vì yêu thương. Xin cho con can đảm vác thập giá đời mình mỗi ngày.'],
-  ['Chúa Giêsu ngã xuống lần thứ nhất', 'Chúa ngã xuống nhưng lại đứng lên. Xin cho con không thất vọng khi vấp ngã.'],
+  ['Chúa Giêsu bị kết án tử', 'Người vô tội chịu kết án bất công mà vẫn hiền lành. Xin cho con biết bình an khi bị hiểu lầm.'],
+  ['Chúa Giêsu vác thập giá', 'Chúa đón nhận Thánh Giá vì yêu thương. Xin cho con can đảm vác thập giá đời mình mỗi ngày.'],
+  ['Chúa Giêsu ngã lần thứ nhất', 'Chúa ngã xuống nhưng lại đứng lên. Xin cho con không thất vọng khi vấp ngã.'],
   ['Chúa Giêsu gặp Đức Mẹ', 'Mẹ và Con gặp nhau trong đau khổ. Xin Mẹ ở bên những người mẹ đang khóc vì con cái mình.'],
-  ['Ông Simon giúp Chúa Giêsu vác Thánh Giá', 'Ông Simon được mời chia sẻ gánh nặng với Chúa. Xin cho con sẵn lòng nâng đỡ người bên cạnh.'],
-  ['Bà Vêrônica lau mặt Chúa Giêsu', 'Bà Vêrônica can đảm đến gần Chúa. Xin cho con nhận ra khuôn mặt Chúa nơi người đau khổ.'],
-  ['Chúa Giêsu ngã xuống lần thứ hai', 'Sức nặng của tội lỗi đè trên vai Chúa. Xin cho con biết chỗi dậy nhờ ơn tha thứ.'],
-  ['Chúa Giêsu an ủi các phụ nữ thành Giêrusalem', 'Giữa đau đớn, Chúa vẫn nghĩ đến người khác. Xin cho con biết thương xót anh chị em mình.'],
-  ['Chúa Giêsu ngã xuống lần thứ ba', 'Kiệt sức mà Chúa vẫn tiến bước. Xin cho con trung thành đến cùng.'],
+  ['Chúa Giêsu được ông Simon vác đỡ thập giá', 'Ông Simon được mời chia sẻ gánh nặng với Chúa. Xin cho con sẵn lòng nâng đỡ người bên cạnh.'],
+  ['Bà Veronica lau mặt Chúa Giêsu', 'Bà Vêrônica can đảm đến gần Chúa. Xin cho con nhận ra khuôn mặt Chúa nơi người đau khổ.'],
+  ['Chúa Giêsu ngã lần thứ hai', 'Sức nặng của tội lỗi đè trên vai Chúa. Xin cho con biết chỗi dậy nhờ ơn tha thứ.'],
+  ['Chúa Giêsu gặp các phụ nữ Giêrusalem', 'Giữa đau đớn, Chúa vẫn nghĩ đến người khác. Xin cho con biết thương xót anh chị em mình.'],
+  ['Chúa Giêsu ngã lần thứ ba', 'Kiệt sức mà Chúa vẫn tiến bước. Xin cho con trung thành đến cùng.'],
   ['Chúa Giêsu bị lột áo', 'Chúa chịu mất cả phẩm giá bên ngoài. Xin cho con biết tôn trọng phẩm giá của mọi người.'],
-  ['Chúa Giêsu bị đóng đinh vào Thánh Giá', 'Chúa giang tay trên Thánh Giá để ôm lấy mọi người. Xin cho con biết tha thứ như Chúa.'],
-  ['Chúa Giêsu chết trên Thánh Giá', 'Chúa phó linh hồn trong tay Chúa Cha. Xin cho con biết phó thác cuộc đời trong tay Thiên Chúa.'],
-  ['Tháo xác Chúa Giêsu xuống khỏi Thánh Giá', 'Đức Mẹ đón nhận xác Con vào lòng. Xin Mẹ ôm lấy những ai đang mất người thân.'],
-  ['Táng xác Chúa Giêsu trong mồ', 'Xác Chúa nằm trong mồ, chờ ngày Phục Sinh. Xin cho con giữ vững niềm hy vọng.']
+  ['Chúa Giêsu bị đóng đinh vào thập giá', 'Chúa giang tay trên Thánh Giá để ôm lấy mọi người. Xin cho con biết tha thứ như Chúa.'],
+  ['Chúa Giêsu chết trên thập giá', 'Chúa phó linh hồn trong tay Chúa Cha. Xin cho con biết phó thác cuộc đời trong tay Thiên Chúa.'],
+  ['Chúa Giêsu được tháo xuống khỏi thập giá', 'Đức Mẹ đón nhận xác Con vào lòng. Xin Mẹ ôm lấy những ai đang mất người thân.'],
+  ['Chúa Giêsu được mai táng', 'Xác Chúa nằm trong mồ, chờ ngày Phục Sinh. Xin cho con giữ vững niềm hy vọng.']
 ];
 const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV'];
 const STATION_Z_LEFT = [-4.3, -2.6, -.3, 1.5, 2.8, 4.6, 5.9];   // chặng 1–7: tường trái, từ cung thánh ra cửa
@@ -757,20 +757,20 @@ STATIONS.forEach(([name], i) => {
 const SX = 400;
 const SHRINES = [
   {id:'lavang', name:'Đức Mẹ La Vang', place:'Hải Lăng, Quảng Trị',
-   blurb:'Theo truyền thống, năm 1798 Đức Mẹ đã hiện ra an ủi những giáo dân đang lánh nạn trong rừng La Vang. Nhà thờ La Vang được nâng lên bậc Tiểu Vương cung thánh đường năm 1961.',
+   blurb:'Theo lời truyền tụng, năm 1798, thời vua Cảnh Thịnh, giáo dân trốn cơn bách hại vào rừng La Vang và được Đức Mẹ hiện ra an ủi. Năm 1961, nhà thờ La Vang được nâng lên hàng Vương cung thánh đường và được chọn làm Trung tâm Thánh Mẫu toàn quốc.',
    sky:['#7fb4e6','#f4dcb4'], ground:'#5d8a3c', fog:[0xe9dcc4, 30, 90], mantle:0x3d63b0, child:true, landmark:'lavang'},
   {id:'trakieu', name:'Đức Mẹ Trà Kiệu', place:'Duy Xuyên, Quảng Nam',
-   blurb:'Tương truyền năm 1885, Đức Mẹ đã che chở giáo dân Trà Kiệu trong cơn bách hại. Đền thánh nằm trên đồi Bửu Châu, mỗi năm đón nhiều đoàn hành hương.',
+   blurb:'Tháng 9 năm 1885, làng Trà Kiệu bị quân Văn Thân vây đánh suốt 21 ngày. Giáo dân tin rằng Đức Mẹ đã che chở họ: binh lính bên ngoài kể lại thấy một bà mặc áo trắng trên mái nhà thờ. Đền thánh Đức Bà Phù Hộ Các Giáo Hữu nằm trên đồi Bửu Châu, là Trung tâm Thánh Mẫu của Giáo phận Đà Nẵng.',
    sky:['#6aa7e0','#dff0ff'], ground:'#6b9a44', fog:[0xd7e8f5, 30, 95], mantle:0x7fa3d6, landmark:'trakieu'},
   {id:'phatdiem', name:'Nhà thờ đá Phát Diệm', place:'Kim Sơn, Ninh Bình',
-   blurb:'Quần thể nhà thờ bằng đá và gỗ do cha Phêrô Trần Lục xây dựng từ năm 1875 đến 1899, mang dáng mái đình làng Việt Nam.',
+   blurb:'Quần thể nhà thờ bằng đá và gỗ do cha Phêrô Trần Lục (Cụ Sáu) khởi công năm 1875. Nhà thờ lớn với 52 cột gỗ lim dựng năm 1891, Phương Đình là công trình sau cùng, hoàn thành năm 1899. Kiến trúc mang dáng mái đình làng Việt Nam.',
    sky:['#8aa4bf','#e6e3da'], ground:'#58804a', fog:[0xdcdcd4, 25, 80], mantle:0x4d6fb8, landmark:'phatdiem'},
   {id:'ducba', name:'Nhà thờ Đức Bà Sài Gòn', place:'Quận 1, TP. Hồ Chí Minh',
-   blurb:'Nhà thờ gạch đỏ xây từ năm 1877 đến 1880, được nâng lên bậc Vương cung thánh đường năm 1962. Tượng Đức Mẹ Hòa Bình đứng ở quảng trường phía trước.',
+   blurb:'Viên đá đầu tiên được đặt ngày 7/10/1877, nhà thờ khánh thành vào lễ Phục Sinh ngày 11/4/1880. Năm 1959, nhà thờ được nâng lên hàng Vương cung thánh đường; cùng năm, tượng Đức Mẹ Nữ Vương Hòa Bình được dựng ở quảng trường phía trước.',
    sky:['#4f93dc','#cfe6fb'], ground:'#5f9446', fog:[0xcfe3f5, 35, 110], mantle:0xe8e4da, landmark:'ducba'},
   {id:'mangden', name:'Đức Mẹ Măng Đen', place:'Kon Plông, Kon Tum',
-   blurb:'Linh địa giữa rừng thông trên cao nguyên, nơi giáo dân nhiều nơi về hành hương và cầu nguyện bên tượng Đức Mẹ.',
-   sky:['#9fb7c9','#e5ecef'], ground:'#4f7a3e', fog:[0xdfe7ea, 14, 55], mantle:0x6b8fd0, landmark:'mangden'}
+   blurb:'Tượng Đức Mẹ Fatima được dựng trên triền đồi Măng Đen vào Mùa Vọng năm 1971, rồi bị chiến tranh làm hư hại, mất hai bàn tay. Năm 2006, Giáo phận Kon Tum tìm lại pho tượng. Nay nơi đây là Trung tâm Hành hương Đức Mẹ Măng Đen, giáo dân quen gọi là Đức Mẹ Cụt Tay.',
+   sky:['#9fb7c9','#e5ecef'], ground:'#4f7a3e', fog:[0xdfe7ea, 14, 55], mantle:0xf1eee6, noHands:true, landmark:'mangden'}
 ];
 let world = 'chapel', shrineGroup = null;
 const shrineColliders = [];
@@ -816,7 +816,7 @@ function buildShrine(sp){
     const ch = new THREE.Group(); ch.position.set(.12, .92, .16); st.add(ch);
     ch.add(new THREE.Mesh(new THREE.CapsuleGeometry(.045, .12, 4, 8), robeM));
     const chh = new THREE.Mesh(new THREE.SphereGeometry(.042, 12, 10), skinM); chh.position.y = .13; ch.add(chh);
-  }else{
+  }else if(!sp.noHands){
     const hands = new THREE.Mesh(new THREE.ConeGeometry(.045, .16, 10), skinM); hands.position.set(0, .98, .2); hands.rotation.x = -.25; st.add(hands);
   }
   for(const s of [-1,1]){ add(new THREE.CylinderGeometry(.2, .16, .35, 12), mat(0x8a5a3a), s*1.3, .18, -1.9); add(new THREE.SphereGeometry(.28, 10, 8), mat(0xf4f0f6), s*1.3, .5, -1.9); }
@@ -1523,8 +1523,9 @@ const stationsToday = () => { const t = todayState(); if(!Array.isArray(t.st)) t
 function openStation(i){
   const [name, med] = STATIONS[i], seen = stationsToday();
   openSheet(`Chặng ${i+1}`, name, `
-    <div class="prayer"><p><b>℣.</b> Lạy Chúa Kitô, chúng con thờ lạy và ca ngợi Chúa.</p><p><b>℟.</b> Vì Chúa đã dùng Thánh Giá Thánh mà cứu chuộc thế gian.</p></div>
-    <div class="meditation"><small>Suy niệm</small>${med}</div>
+    <div class="prayer"><p><b>Xướng:</b> Lạy Chúa Kitô, chúng con thờ lạy và ngợi khen Chúa.</p><p><b>Đáp:</b> Vì Chúa đã dùng Thánh Giá mà cứu chuộc loài người.</p></div>
+    <div class="meditation"><small>Lời nguyện ngắn</small>${med}</div>
+    <p class="fine" style="margin:0">Suy niệm đầy đủ: <a href="https://www.vaticannews.va/vi/pope/news/2026-04/ban-van-dang-thanh-gia-colosseo-2026.html" target="_blank" rel="noopener" style="color:var(--candle)">Đàng Thánh Giá tại Colosseo 2026, Vatican News</a></p>
     <p class="fine" style="margin:0">Bạn có thể đọc một Kinh Lạy Cha, một Kinh Kính Mừng và một Kinh Sáng Danh trước khi sang chặng tiếp theo.</p>
     <div class="row">${i < 13 ? `<button class="btn" id="stNext">Đi tới chặng ${i+2}</button>` : '<button class="btn" id="stNext">Kết thúc Đàng Thánh Giá</button>'}<button class="btn ghost" id="stClose">Đóng</button></div>
     <p class="fine">Hôm nay bạn đã suy niệm ${seen.length + (seen.includes(i) ? 0 : 1)}/14 chặng.</p>`);
