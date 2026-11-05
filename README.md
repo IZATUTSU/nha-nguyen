@@ -18,3 +18,15 @@ và thấy những người khác đang cùng cầu nguyện.
 ## Lưu ý nội dung
 Lời kinh trong bản thử nghiệm cần linh mục duyệt lại trước khi công bố rộng rãi.
 Game là nơi cầu nguyện, không thay thế Thánh lễ và các bí tích.
+
+## Nến và tường ý nguyện dùng chung
+1. Mở Supabase → **SQL Editor** → **New query**, dán toàn bộ `supabase/schema.sql`, bấm **Run**.
+2. Xong. Game tự nhận ra hai bảng `candles` và `intentions`. Nếu chưa chạy SQL, game vẫn chạy và lưu nến/ý nguyện trên từng máy.
+
+### Ẩn một ý nguyện không phù hợp
+Supabase → **Table Editor** → bảng `intentions` → đổi cột `hidden` của dòng đó thành `true`.
+Người chơi sẽ không thấy ý nguyện này nữa (sau khi tải lại trang).
+
+### Giới hạn chống spam (trong `schema.sql`)
+- Toàn nhà nguyện: tối đa 150 ngọn nến và 40 ý nguyện mỗi 10 phút.
+- Mỗi máy: 30 giây mới được ghi một ý nguyện, mỗi ý nguyện chỉ bấm "Cầu nguyện" một lần.

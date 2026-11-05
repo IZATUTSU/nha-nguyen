@@ -272,6 +272,14 @@ let candles = store.get('candles', []).filter(c => Date.now() - c.t < 24*HOUR);
 let intentions = store.get('intentions', []);
 const saveCandles = () => store.set('candles', candles);
 const saveIntentions = () => store.set('intentions', intentions.slice(0,100));
+// Dữ liệu dùng chung (nến, ý nguyện) khi kết nối được máy chủ; nếu không thì dùng bản lưu trên máy
+const shared = {online:false, candles:[], intentions:[], redraw:null};
+const rackList = () => shared.online ? shared.candles : candles;
+const intentionsList = () => shared.online ? shared.intentions : intentions;
+const prayedSet = new Set(store.get('prayed', []));
+const uuid = () => (window.crypto?.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
+let lastIntentAt = 0;
 
 /* =====================================================================
    2. ÂM THANH: chuông, que diêm, tiếng hạt
@@ -585,8 +593,10 @@ function refreshRack(animateIndex = -1){
   const free = slots.map((_, i) => i).filter(i => !COMMUNITY.includes(i));
   slots.forEach((_, i) => setSlot(i, false));
   COMMUNITY.forEach(i => setSlot(i, true));
-  candles.slice(-free.length).forEach((c, k) => setSlot(free[k], true, free[k] === animateIndex));
-  rackBase = 1.6 + .35*(COMMUNITY.length + Math.min(candles.length, free.length));
+  shared.candles = shared.candles.filter(c => Date.now() - c.t < 24*HOUR);
+  const list = rackList();
+  list.slice(-free.length).forEach((c, k) => setSlot(free[k], true, free[k] === animateIndex));
+  rackBase = 1.6 + .35*(COMMUNITY.length + Math.min(list.length, free.length));
   return free;
 }
 refreshRack();
@@ -611,7 +621,7 @@ box(.1, .06, 2.02, M.darkWood, WALL_NOTES.x, 2.33, WALL_NOTES.z); box(.1, .06, 2
 const noteGroup = new THREE.Group(); scene.add(noteGroup);
 function refreshNotes(){
   noteGroup.clear();
-  const r = rng(5), n = Math.min(intentions.length, 20);
+  const r = rng(5), n = Math.min(intentionsList().length, 20);
   for(let i=0;i<n;i++){
     const p = new THREE.Mesh(new THREE.PlaneGeometry(.26,.18), M.paper);
     p.position.set(WALL_NOTES.x-.05, 2.12 - Math.floor(i/5)*.27, WALL_NOTES.z - .72 + (i%5)*.36);
@@ -779,6 +789,7 @@ async function useSupabaseNet(){
   try{
     const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/+esm');
     const client = createClient(NET_CONFIG.supabaseUrl, NET_CONFIG.supabaseKey, {realtime:{params:{eventsPerSecond:8}}});
+    sb = client; initShared();
     const ch = client.channel('room-' + NET_CONFIG.room, {config:{broadcast:{self:false}, presence:{key:me.id}}});
     ch.on('broadcast', {event:'s'}, ({payload}) => onNet(payload));
     ch.on('presence', {event:'leave'}, ({key}) => onNet({id:key, bye:true}));
@@ -794,6 +805,71 @@ async function useSupabaseNet(){
     setTimeout(() => { if(!settled){ settled = true; useLocalNet(); } }, 12000);
   }catch(e){ useLocalNet(); }
 }
+// ---- Nến và ý nguyện dùng chung (bảng candles, intentions trên Supabase) ----
+let sb = null;
+const rowIntention = r => ({id:r.id, text:r.text, name:r.name, t:Date.parse(r.created_at), prayed:r.prayed});
+const freeSlots = () => slots.map((_, i) => i).filter(i => !COMMUNITY.includes(i));
+const friendlyErr = e => /Quá nhiều/.test(e?.message || '') ? 'đang có quá nhiều lượt, bạn thử lại sau ít phút.' : 'bạn kiểm tra mạng rồi thử lại.';
+async function initShared(){
+  try{
+    const since = new Date(Date.now() - 24*HOUR).toISOString();
+    const [c, i] = await Promise.all([
+      sb.from('candles').select('id,created_at').gte('created_at', since).order('created_at', {ascending:true}).limit(300),
+      sb.from('intentions').select('id,name,text,prayed,created_at').order('created_at', {ascending:false}).limit(60)
+    ]);
+    if(c.error || i.error) throw (c.error || i.error);
+    shared.candles = c.data.map(r => ({id:r.id, t:Date.parse(r.created_at)}));
+    shared.intentions = i.data.map(rowIntention);
+    shared.online = true; refreshRack(); refreshNotes(); shared.redraw?.();
+    sb.channel('db-' + me.id)
+      .on('postgres_changes', {event:'INSERT', schema:'public', table:'candles'}, ({new:r}) => {
+        if(!r?.id || shared.candles.some(x => x.id === r.id)) return;
+        shared.candles.push({id:r.id, t:Date.parse(r.created_at)});
+        const free = freeSlots(); refreshRack(free[Math.min(shared.candles.length, free.length) - 1]);
+      })
+      .on('postgres_changes', {event:'INSERT', schema:'public', table:'intentions'}, ({new:r}) => {
+        if(!r?.id || shared.intentions.some(x => x.id === r.id)) return;
+        shared.intentions.unshift(rowIntention(r)); refreshNotes(); shared.redraw?.();
+      })
+      .on('postgres_changes', {event:'UPDATE', schema:'public', table:'intentions'}, ({new:r}) => {
+        const it = shared.intentions.find(x => x.id === r?.id); if(!it) return;
+        if(r.hidden){ shared.intentions = shared.intentions.filter(x => x.id !== r.id); refreshNotes(); }
+        else if(Number.isFinite(r.prayed)) it.prayed = Math.max(it.prayed, r.prayed);
+        shared.redraw?.();
+      })
+      .subscribe();
+  }catch(e){ shared.online = false; console.warn('Chưa tải được nến và ý nguyện dùng chung', e); }
+}
+async function shareCandle(){
+  const id = uuid(); shared.candles.push({id, t:Date.now()});
+  const {error} = await sb.from('candles').insert({id, name:profile.name || 'Khách hành hương'});
+  if(error){ shared.candles = shared.candles.filter(x => x.id !== id); refreshRack(); toast('Chưa gửi được ngọn nến lên nhà nguyện chung: ' + friendlyErr(error)); }
+}
+async function addIntention(text){
+  const name = profile.name || 'Khách hành hương';
+  if(shared.online && sb){
+    const id = uuid();
+    shared.intentions.unshift({id, text, name, t:Date.now(), prayed:0}); refreshNotes(); shared.redraw?.();
+    const {error} = await sb.from('intentions').insert({id, text, name});
+    if(error){
+      shared.intentions = shared.intentions.filter(x => x.id !== id); refreshNotes(); shared.redraw?.();
+      toast('Chưa gửi được ý nguyện: ' + friendlyErr(error));
+    }
+  }else{
+    intentions.unshift({id:Date.now(), text, name, t:Date.now(), prayed:0}); saveIntentions(); refreshNotes(); shared.redraw?.();
+  }
+}
+async function prayFor(it){
+  const key = String(it.id);
+  if(prayedSet.has(key)){ toast('Bạn đã cầu nguyện cho ý này rồi. Cảm ơn bạn.'); return; }
+  prayedSet.add(key); store.set('prayed', [...prayedSet].slice(-500));
+  it.prayed++; shared.redraw?.();
+  if(shared.online && sb && typeof it.id === 'string'){
+    const {data, error} = await sb.rpc('pray_for', {intention_id:it.id});
+    if(!error && Number.isFinite(data)){ it.prayed = Math.max(it.prayed, data); shared.redraw?.(); }
+  }else saveIntentions();
+}
+
 if(NET_CONFIG.supabaseUrl && NET_CONFIG.supabaseKey) useSupabaseNet(); else useLocalNet();
 
 function onNet(m){
@@ -1007,7 +1083,7 @@ function openSheet(title, sub, body){
   sheet.hidden = false; promptEl.hidden = true; current = null;
   $('#closeSheet').addEventListener('click', closeSheet);
 }
-function closeSheet(){ sheet.hidden = true; uiOpen = false; rosary.active = false; current = null; canvas.focus({preventScroll:true}); }
+function closeSheet(){ sheet.hidden = true; uiOpen = false; shared.redraw = null; rosary.active = false; current = null; canvas.focus({preventScroll:true}); }
 let toastTimer = 0;
 function toast(html, ms = 4200){
   const t = $('#toast'); t.innerHTML = html; t.hidden = false; clearTimeout(toastTimer);
@@ -1026,14 +1102,15 @@ function openCandle(){
   $('#lightBtn').addEventListener('click', () => {
     const text = $('#candleText').value.trim();
     candles.push({t:Date.now(), text}); saveCandles();
-    if(text && $('#candleWall').checked){ intentions.unshift({id:Date.now(), text, t:Date.now(), prayed:0}); saveIntentions(); refreshNotes(); }
+    if(text && $('#candleWall').checked) addIntention(text);
     note('candle', 'candles');
+    if(shared.online) shareCandle();
     const free = slots.map((_, i) => i).filter(i => !COMMUNITY.includes(i));
-    const k = Math.min(candles.length, free.length) - 1;
+    const k = Math.min(rackList().length, free.length) - 1;
     refreshRack(free[k]);
     matchSound();
     closeSheet();
-    toast('Ngọn nến đã được thắp. Xin Đức Mẹ cầu bầu cho bạn.');
+    toast(shared.online ? 'Ngọn nến đã được thắp. Mọi người trong nhà nguyện đều thấy ngọn nến của bạn.' : 'Ngọn nến đã được thắp. Xin Đức Mẹ cầu bầu cho bạn.');
   });
 }
 
@@ -1079,26 +1156,32 @@ function rosaryNext(){
 
 // ---- Tường ý nguyện ----
 function openIntentions(){
-  openSheet('Tường ý nguyện', 'Cùng cầu nguyện cho nhau', `
+  openSheet('Tường ý nguyện', shared.online ? 'Mọi người trong nhà nguyện cùng thấy và cùng cầu nguyện' : 'Cùng cầu nguyện cho nhau', `
     <label class="field" for="intentText">Viết ý nguyện
       <textarea id="intentText" maxlength="160" placeholder="Ví dụ: Cầu cho các bạn trẻ đang thi đại học"></textarea></label>
     <div class="row"><button class="btn small" id="intentAdd">Ghi lên tường</button></div>
+    ${shared.online ? '<p class="fine">Ý nguyện hiện công khai cùng tên hiển thị của bạn. Đừng ghi số điện thoại, địa chỉ hay chuyện riêng tư của người khác.</p>' : ''}
     <ul class="list" id="intentList"></ul>
-    <p class="fine">Bản thử nghiệm chỉ lưu ý nguyện trên máy của bạn. Bản trực tuyến sau này sẽ cho mọi người cùng thấy và cùng cầu nguyện.</p>`);
+    ${shared.online ? '' : '<p class="fine">Đang ở chế độ thử: ý nguyện chỉ lưu trên máy này.</p>'}`);
   const list = $('#intentList');
   const draw = () => {
-    if(!intentions.length){ list.innerHTML = '<li class="empty">Chưa có ý nguyện nào. Hãy viết ý nguyện đầu tiên, nó sẽ được ghim lên tường gỗ cạnh cửa.</li>'; return; }
-    list.innerHTML = intentions.map(it => `<li><p>${esc(it.text)}</p><div class="meta"><span>${new Date(it.t).toLocaleDateString('vi-VN')}</span><button class="btn ghost small" data-pray="${it.id}">Cầu nguyện · ${it.prayed}</button></div></li>`).join('');
+    if(!list.isConnected){ shared.redraw = null; return; }
+    const items = intentionsList();
+    if(!items.length){ list.innerHTML = '<li class="empty">Chưa có ý nguyện nào. Hãy viết ý nguyện đầu tiên, nó sẽ được ghim lên tường gỗ cạnh cửa.</li>'; return; }
+    list.innerHTML = items.map(it => {
+      const done = prayedSet.has(String(it.id));
+      return `<li><p>${esc(it.text)}</p><div class="meta"><span>${it.name ? esc(it.name) + ' · ' : ''}${new Date(it.t).toLocaleDateString('vi-VN')}</span><button class="btn ghost small" data-pray="${esc(it.id)}" aria-pressed="${done}">${done ? 'Đã cầu nguyện' : 'Cầu nguyện'} · ${it.prayed}</button></div></li>`;
+    }).join('');
     list.querySelectorAll('[data-pray]').forEach(b => b.addEventListener('click', () => {
-      const it = intentions.find(x => String(x.id) === b.dataset.pray); if(!it) return;
-      it.prayed++; saveIntentions(); beadSound(true); draw();
+      const it = intentionsList().find(x => String(x.id) === b.dataset.pray); if(!it) return;
+      beadSound(true); prayFor(it);
     }));
   };
-  draw();
+  shared.redraw = draw; draw();
   $('#intentAdd').addEventListener('click', () => {
     const v = $('#intentText').value.trim(); if(!v) { $('#intentText').focus(); return; }
-    intentions.unshift({id:Date.now(), text:v, t:Date.now(), prayed:0}); saveIntentions(); refreshNotes();
-    $('#intentText').value = ''; draw();
+    if(Date.now() - lastIntentAt < 30000){ toast('Bạn vừa ghi một ý nguyện. Hãy đợi khoảng nửa phút rồi ghi tiếp.'); return; }
+    lastIntentAt = Date.now(); addIntention(v); $('#intentText').value = '';
   });
 }
 
