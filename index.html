@@ -1248,12 +1248,18 @@ class Avatar{
         shL:bone('Shoulder.L'), uaL:bone('UpperArm.L'), laL:bone('LowerArm.L'), fL:bone('Fist.L'),
         shR:bone('Shoulder.R'), uaR:bone('UpperArm.R'), laR:bone('LowerArm.R'), fR:bone('Fist.R'),
         ulL:bone('UpperLeg.L'), llL:bone('LowerLeg.L'), ftL:bone('Foot.L'), ulR:bone('UpperLeg.R'), llR:bone('LowerLeg.R'), ftR:bone('Foot.R')};
-      if(this.b.fR){ this.b.fR.add(this.beads); this.beads.scale.setScalar(1/info.scale); this.beads.position.set(0, 0, 0); }
-      // khăn voan cho nữ (tuỳ chọn)
+      // gắn đồ vật vào xương: đặt theo toạ độ thân người rồi attach để giữ đúng cỡ và hướng (xương có tỉ lệ, xoay riêng)
+      this.root.updateMatrixWorld(true);
+      const pin = (obj, bone, x, y, z) => { obj.position.set(x, y, z); obj.rotation.set(0, 0, 0); this.root.add(obj); this.root.updateMatrixWorld(true); bone.attach(obj); };
+      const Pl = bn => this.root.worldToLocal(new THREE.Vector3().setFromMatrixPosition(bn.matrixWorld));
+      if(this.b.fR){ const f = Pl(this.b.fR); pin(this.beads, this.b.fR, f.x, f.y - .04, f.z); }
+      // khăn voan cho nữ (tuỳ chọn): phủ đỉnh và sau đầu, chừa mặt
       if(this.look.veil && this.b.head){
-        const veil = new THREE.Mesh(new THREE.SphereGeometry(.15, 20, 14, Math.PI*.9, Math.PI*1.2, 0, Math.PI*.62),
-          std({color:0xffffff, roughness:.6, transparent:true, opacity:.88, side:THREE.DoubleSide}));
-        veil.scale.setScalar(1/info.scale); veil.position.set(0, .12/info.scale, -.01/info.scale); this.b.head.add(veil);
+        const h = Pl(this.b.head), r = Math.max(.12, (TARGET_HEIGHT - h.y)*.5);
+        const veil = new THREE.Mesh(new THREE.SphereGeometry(r*1.12, 24, 16, Math.PI*.88, Math.PI*1.24, 0, Math.PI*.7),
+          std({color:0xf4f1ea, roughness:.7, transparent:true, opacity:.92, side:THREE.DoubleSide}));
+        pin(veil, this.b.head, h.x, h.y + r*1.02, h.z - r*.08);
+        this.veil = veil;
       }
       // hoạt ảnh
       this.mixer = new THREE.AnimationMixer(model);
@@ -1359,8 +1365,8 @@ class Avatar{
     const chestY = neck.y - .2;
     // chắp tay trước ngực
     if(this.w.arms > .001){
-      twoBoneIK(b.uaL, b.laL, b.fL, local(.025, chestY, .2), local(sL.x + .5, sL.y - .5, sL.z - .3), this.w.arms);
-      twoBoneIK(b.uaR, b.laR, b.fR, local(-.025, chestY, .2), local(sR.x - .5, sR.y - .5, sR.z - .3), this.w.arms);
+      twoBoneIK(b.uaL, b.laL, b.fL, local(.05, chestY - .04, .24), local(sL.x + .5, sL.y - .5, sL.z - .3), this.w.arms);
+      twoBoneIK(b.uaR, b.laR, b.fR, local(-.05, chestY - .04, .24), local(sR.x - .5, sR.y - .5, sR.z - .3), this.w.arms);
     }
     // làm dấu Thánh Giá: trán → ngực → vai trái → vai phải, tay trái đặt trước bụng
     if(gesturing){
@@ -2310,6 +2316,8 @@ if(SHOWROOM){
     view.third = false; paintView();
     $('#nameInput').value = 'Người xem'; enter();
     player.x = 0; player.z = -3.6; yaw = 0; pitch = -.06;
+    const camQ = new URLSearchParams(location.search).get('cam');   // ví dụ ?cam=3,-6.6,-1.57 để nhìn ngang
+    if(camQ){ const [cx, cz, cy] = camQ.split(',').map(Number); player.x = cx; player.z = cz; yaw = cy || 0; }
     setInterval(() => {
       k++;
       for(const c of cast){
