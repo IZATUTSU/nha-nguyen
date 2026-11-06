@@ -194,7 +194,8 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
       <label class="field" for="nameInput">Tên hiển thị
         <input type="text" id="nameInput" maxlength="24" placeholder="Ví dụ: Giuse Minh" autocomplete="off"></label>
       <div class="plabel">Nhân vật</div>
-      <div class="seg" id="styleSeg"><button data-style="nam" aria-pressed="true">Nam</button><button data-style="nu" aria-pressed="false">Nữ, khăn voan</button><button data-style="aodai" aria-pressed="false">Áo dài</button></div>
+      <div class="seg" id="styleSeg"></div>
+      <label class="check" for="veilChk" id="veilRow"><input type="checkbox" id="veilChk"> Đội khăn voan</label>
       <div class="plabel">Màu da</div>
       <div class="swatches" id="skinSeg"></div>
       <p class="field-err" id="nameErr" hidden></p>
@@ -246,7 +247,7 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
 <div id="rotate" hidden><div><svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M50 40a16 16 0 0 1-14 14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M36 50l0 5 5 0" fill="none" stroke="currentColor" stroke-width="3"/></svg><p>Hãy xoay ngang điện thoại để vào nhà nguyện</p></div></div>
 <div id="nogl" hidden>Trình duyệt này chưa bật được đồ hoạ 3D (WebGL). Hãy thử Chrome, Edge hoặc Safari bản mới.</div>
 
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 
@@ -375,6 +376,7 @@ function noiDungViPham(t){
   if(/[a-z0-9._%+-]+@[a-z0-9-]+\.[a-z]/i.test(t)) return 'địa chỉ email';
   return null;
 }
+const myLook = () => ({model:profile.model, shirt:profile.shirt, skin:profile.skin || 0, veil:!!(profile.veil && modelInfo(profile.model)?.female), style:modelInfo(profile.model)?.female ? 'nu' : 'nam'});
 const safeName = n => (n && !noiDungViPham(n)) ? String(n).slice(0, 24) : 'Khách hành hương';
 const reportedSet = new Set(store.get('reported', []));
 const deviceId = store.get('device', null) || (() => { const id = 'tb-' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store.set('device', id); return id; })();
@@ -963,7 +965,7 @@ const SIGN = {tran:[-1.858,.305,.543,-1.757], nguc:[-.255,.735,.44,-2.114], vaiT
 const CROSS_KEYS = [[0,null],[.42,...SIGN.tran],[.62,...SIGN.tran],[.98,...SIGN.nguc],[1.14,...SIGN.nguc],[1.5,...SIGN.vaiTrai],[1.66,...SIGN.vaiTrai],
   [2.0,...SIGN.vaiPhai],[2.14,...SIGN.vaiPhai],[2.6,null]];
 const LEFT_BELLY = [.056,-.702,-.135,-1.963];   // tay trái đặt nhẹ trước bụng trong lúc làm dấu
-class Avatar{
+class BlockAvatar{   // nhân vật dựng bằng khối, dùng khi không tải được mô hình
   constructor(look = {}, name = ''){
     const style = ['nam','nu','aodai'].includes(look.style) ? look.style : 'nam', female = style !== 'nam', aodai = style === 'aodai';
     const shirtCol = new THREE.Color(SHIRTS[look.shirt ?? 0] || SHIRTS[0]);
@@ -1133,6 +1135,254 @@ class Avatar{
   dispose(){ scene.remove(this.root); this.root.traverse(o => o.geometry?.dispose?.()); }
 }
 
+
+/* =====================================================================
+   3c. NHÂN VẬT TỪ MÔ HÌNH QUATERNIUS (Ultimate Animated Character Pack, CC0)
+   Đứng, đi, ngồi: hoạt ảnh có sẵn. Quỳ, chắp tay, làm dấu: điều khiển xương bằng IK.
+   ===================================================================== */
+const MODEL_BASE = './models/';
+const CHAR_MODELS = [
+  {id:'Casual_Male',      label:'Nam · thường ngày',   female:false},
+  {id:'Casual3_Male',     label:'Nam · áo sơ mi',      female:false},
+  {id:'Suit_Male',        label:'Nam · com-lê',        female:false},
+  {id:'Casual_Female',    label:'Nữ · thường ngày',    female:true},
+  {id:'Casual2_Female',   label:'Nữ · áo kiểu',        female:true},
+  {id:'Suit_Female',      label:'Nữ · áo vest',        female:true},
+  {id:'OldClassy_Female', label:'Bà · đứng tuổi',      female:true}
+];
+const modelInfo = id => CHAR_MODELS.find(m => m.id === id);
+// hồ sơ cũ (nam / nữ / áo dài) chuyển sang mô hình mới
+function lookModel(look){
+  if(look && modelInfo(look.model)) return look.model;
+  return look?.style === 'nu' ? 'Casual_Female' : look?.style === 'aodai' ? 'Suit_Female' : 'Casual_Male';
+}
+const TARGET_HEIGHT = 1.68;
+const gltfCache = new Map();
+let gltfLoader = null;
+async function loadCharacter(id){
+  if(!gltfCache.has(id)) gltfCache.set(id, (async () => {
+    const [{GLTFLoader}, {MeshoptDecoder}] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/libs/meshopt_decoder.module.js')]);
+    if(!gltfLoader){ gltfLoader = new GLTFLoader(); gltfLoader.setMeshoptDecoder(MeshoptDecoder); }
+    const gltf = await gltfLoader.loadAsync(MODEL_BASE + id + '.glb');
+    gltf.scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    return {gltf, scale: TARGET_HEIGHT/Math.max(.1, box.max.y - box.min.y), minY: box.min.y};
+  })());
+  return gltfCache.get(id);
+}
+let SkeletonUtilsMod = null;
+
+// ---- IK hai đoạn: xoay xương để đầu chi chạm đích, khuỷu/gối hướng về "cực" (pole) ----
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _t = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _goal = new THREE.Quaternion();
+function aimBone(bone, childWorld, targetWorld, w){
+  bone.updateWorldMatrix(true, false);
+  const bp = _p.setFromMatrixPosition(bone.matrixWorld).clone();
+  const cur = childWorld.clone().sub(bp).normalize(), des = targetWorld.clone().sub(bp).normalize();
+  if(cur.lengthSq() < 1e-8 || des.lengthSq() < 1e-8) return;
+  _q.setFromUnitVectors(cur, des);
+  bone.getWorldQuaternion(_wq); bone.parent.getWorldQuaternion(_pq);
+  _goal.copy(_pq).invert().multiply(_q).multiply(_wq);
+  bone.quaternion.slerp(_goal, w);
+  bone.updateWorldMatrix(false, true);
+}
+function twoBoneIK(up, low, end, target, pole, w){
+  if(w <= .001) return;
+  up.updateWorldMatrix(true, true);
+  const A = new THREE.Vector3().setFromMatrixPosition(up.matrixWorld);
+  const B = new THREE.Vector3().setFromMatrixPosition(low.matrixWorld);
+  const C = new THREE.Vector3().setFromMatrixPosition(end.matrixWorld);
+  const la = A.distanceTo(B), lb = B.distanceTo(C);
+  const toT = target.clone().sub(A); const d = Math.min(Math.max(toT.length(), .01), (la + lb)*.999);
+  const dir = toT.normalize();
+  const cosA = (la*la + d*d - lb*lb)/(2*la*d), along = la*cosA, h = la*Math.sqrt(Math.max(0, 1 - cosA*cosA));
+  const pdir = pole.clone().sub(A); pdir.sub(dir.clone().multiplyScalar(pdir.dot(dir))).normalize();
+  const elbow = A.clone().add(dir.clone().multiplyScalar(along)).add(pdir.multiplyScalar(h));
+  aimBone(up, B, elbow, w);
+  const C2 = new THREE.Vector3().setFromMatrixPosition(end.matrixWorld);
+  aimBone(low, C2, A.clone().add(dir.multiplyScalar(d)), w);
+}
+
+class Avatar{
+  constructor(look = {}, name = ''){
+    this.look = look; this.modelId = lookModel(look);
+    this.root = new THREE.Group(); scene.add(this.root);
+    this.holder = new THREE.Group(); this.root.add(this.holder);   // hạ thấp khi quỳ
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false}));
+    sh.rotation.x = -Math.PI/2; sh.position.y = .015; this.root.add(sh);
+    if(name){ this.label = labelSprite(name); this.label.position.y = TARGET_HEIGHT + .3; this.root.add(this.label); }
+    this.beads = new THREE.Mesh(new THREE.TorusGeometry(.07, .008, 6, 24), BEAD_MAT); this.beads.visible = false;
+    this.state = {pose:'stand', py:null, folded:false, gestureAt:-1};
+    this.j = {py:.91};   // giữ để tương thích; chiều cao đầu lấy từ headY()
+    this.speed = 0; this.walk = 0; this.time = Math.random()*10;
+    this.w = {arms:0, cross:0, kneel:0};   // trọng số IK, chuyển mượt
+    this.sitPhase = 'none';
+    this.ready = false; this.fallback = null;
+    this._load();
+  }
+  async _load(){
+    try{
+      const [info, utils] = await Promise.all([loadCharacter(this.modelId), SkeletonUtilsMod || import('three/addons/utils/SkeletonUtils.js')]);
+      SkeletonUtilsMod = utils;
+      if(this.disposed) return;
+      const model = utils.clone(info.gltf.scene);
+      model.scale.setScalar(info.scale); model.position.y = -info.minY*info.scale;
+      this.holder.add(model); this.model = model;
+      // màu áo, màu da: nhân bản vật liệu rồi tô lại
+      const shirt = new THREE.Color(SHIRTS[this.look.shirt ?? 1] || SHIRTS[1]), skin = new THREE.Color(SKINS[this.look.skin] ?? SKINS[0]);
+      model.traverse(o => {
+        if(!o.isMesh) return;
+        o.frustumCulled = false;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        const out = mats.map(m => {
+          const c = m.clone();
+          if(/^Shirt$/i.test(m.name)) c.color.copy(shirt);
+          else if(/^Skin$/i.test(m.name)) c.color.copy(skin);
+          if('roughness' in c) c.roughness = Math.max(c.roughness, .55);
+          return c;
+        });
+        o.material = Array.isArray(o.material) ? out : out[0];
+      });
+      const bone = n => model.getObjectByName(n);
+      this.b = {hips:bone('Hips'), torso:bone('Torso'), neck:bone('Neck'), head:bone('Head'),
+        shL:bone('Shoulder.L'), uaL:bone('UpperArm.L'), laL:bone('LowerArm.L'), fL:bone('Fist.L'),
+        shR:bone('Shoulder.R'), uaR:bone('UpperArm.R'), laR:bone('LowerArm.R'), fR:bone('Fist.R'),
+        ulL:bone('UpperLeg.L'), llL:bone('LowerLeg.L'), ftL:bone('Foot.L'), ulR:bone('UpperLeg.R'), llR:bone('LowerLeg.R'), ftR:bone('Foot.R')};
+      if(this.b.fR){ this.b.fR.add(this.beads); this.beads.scale.setScalar(1/info.scale); this.beads.position.set(0, 0, 0); }
+      // khăn voan cho nữ (tuỳ chọn)
+      if(this.look.veil && this.b.head){
+        const veil = new THREE.Mesh(new THREE.SphereGeometry(.15, 20, 14, Math.PI*.9, Math.PI*1.2, 0, Math.PI*.62),
+          std({color:0xffffff, roughness:.6, transparent:true, opacity:.88, side:THREE.DoubleSide}));
+        veil.scale.setScalar(1/info.scale); veil.position.set(0, .12/info.scale, -.01/info.scale); this.b.head.add(veil);
+      }
+      // hoạt ảnh
+      this.mixer = new THREE.AnimationMixer(model);
+      const clip = n => info.gltf.animations.find(a => a.name === n);
+      this.act = {};
+      for(const n of ['Idle', 'Walk', 'SitDown', 'StandUp']){ const c = clip(n); if(c) this.act[n] = this.mixer.clipAction(c); }
+      for(const n of ['SitDown', 'StandUp']) if(this.act[n]){ this.act[n].setLoop(THREE.LoopOnce, 1); this.act[n].clampWhenFinished = true; }
+      this.act.Idle?.play(); this.act.Walk?.play(); if(this.act.Walk) this.act.Walk.weight = 0;
+      this.act.Idle && (this.act.Idle.time = Math.random()*2);
+      this.ready = true;
+    }catch(e){
+      console.warn('Không tải được mô hình nhân vật, dùng nhân vật dựng sẵn', e);
+      if(this.disposed) return;
+      this.fallback = new BlockAvatar({style:modelInfo(this.modelId)?.female ? 'nu' : 'nam', shirt:this.look.shirt, skin:this.look.skin}, '');
+      scene.remove(this.fallback.root); this.holder.add(this.fallback.root);
+      this.fallback.state = this.state; this.beads = this.fallback.beads;
+    }
+  }
+  headY(){
+    if(this.fallback) return this.root.position.y + this.fallback.j.py + .72;
+    if(this.ready && this.b.head){ this.b.head.updateWorldMatrix(true, false); return _e.setFromMatrixPosition(this.b.head.matrixWorld).y + .08; }
+    return this.root.position.y + (this.state.pose === 'sit' ? 1.2 : this.state.pose === 'kneel' ? 1.25 : 1.63);
+  }
+  _pose(name, fade = .35){
+    const a = this.act;
+    if(name === 'sit'){
+      if(this.sitPhase === 'down') return;
+      this.sitPhase = 'down';
+      if(a.StandUp) a.StandUp.stop();
+      if(a.SitDown){ a.SitDown.reset().setEffectiveWeight(1).fadeIn(fade).play(); }
+      a.Idle?.fadeOut(fade); a.Walk?.fadeOut(fade);
+    }else if(this.sitPhase === 'down'){
+      this.sitPhase = 'up';
+      if(a.SitDown) a.SitDown.fadeOut(.2);
+      if(a.StandUp){ a.StandUp.reset().setEffectiveWeight(1).fadeIn(.2).play(); }
+      a.Idle?.reset().fadeIn(.6).play(); a.Walk?.reset().play(); if(a.Walk) a.Walk.setEffectiveWeight(0);
+      setTimeout(() => { if(this.sitPhase === 'up'){ this.sitPhase = 'none'; a.StandUp?.fadeOut(.3); } }, 900);
+    }
+  }
+  update(dt, now){
+    if(this.fallback){ this.fallback.speed = this.speed; this.fallback.update(dt, now); return; }
+    if(!this.ready) return;
+    const s = this.state, b = this.b, a = this.act;
+    this.time += dt;
+    // đứng / đi / ngồi bằng hoạt ảnh
+    this._pose(s.pose === 'sit' ? 'sit' : 'other');
+    this.walk += (Math.min(1, this.speed/1.4) - this.walk)*Math.min(1, dt*8);
+    if(this.sitPhase === 'none' && a.Walk && a.Idle){
+      const kneel = s.pose === 'kneel';
+      a.Walk.setEffectiveWeight(kneel ? 0 : this.walk); a.Idle.setEffectiveWeight(kneel ? 1 : 1 - this.walk);
+      a.Walk.timeScale = .7 + this.walk*.5; a.Idle.timeScale = kneel ? .35 : 1;
+    }
+    this.mixer.update(dt);
+    // trọng số IK chuyển mượt
+    const ease = (k, target, speed) => { this.w[k] += (target - this.w[k])*Math.min(1, dt*speed); };
+    const gesturing = s.gestureAt >= 0;
+    ease('kneel', s.pose === 'kneel' ? 1 : 0, 6);
+    ease('arms', (s.folded || s.pose === 'kneel') && !gesturing ? 1 : 0, 7);
+    // hạ người khi quỳ: đầu gối chạm sàn (hoặc bục quỳ)
+    const kneelGround = s.pose === 'kneel' ? Math.max(0, (s.py ?? .46) - .46) : 0;
+    // vị trí khung người: quỳ thì hạ xuống; ngồi thì đặt hông đúng mặt ghế
+    let hy = 0, hz = 0;
+    if(b.hips){
+      b.hips.updateWorldMatrix(true, false);
+      const hipNow = this.root.worldToLocal(_e.setFromMatrixPosition(b.hips.matrixWorld).clone()).sub(this.holder.position);
+      if(this.w.kneel > .001){
+        const hipH = this._hipRest ?? (this._hipRest = hipNow.y);
+        const thigh = this._thigh ?? (this._thigh = _a.setFromMatrixPosition(b.ulL.matrixWorld).distanceTo(_b.setFromMatrixPosition(b.llL.matrixWorld)));
+        hy = -Math.max(0, hipH - (thigh + .06 + kneelGround))*this.w.kneel;
+      }
+      if(this.sitPhase === 'down' && a.SitDown){
+        const dur = a.SitDown.getClip().duration || 1, pr = Math.min(1, a.SitDown.time/dur), k = pr*pr*(3 - 2*pr);
+        hy = (.6 - hipNow.y)*k; hz = (-.03 - hipNow.z)*k;
+      }
+    }
+    this.holder.position.y += (hy - this.holder.position.y)*Math.min(1, dt*(this.sitPhase === 'down' ? 10 : 30));
+    this.holder.position.z += (hz - this.holder.position.z)*Math.min(1, dt*10);
+    this.holder.updateMatrixWorld(true);
+    const R = this.root, local = (x, y, z) => R.localToWorld(new THREE.Vector3(x, y, z));
+    // chân khi quỳ: đùi thẳng đứng, cẳng chân nằm ra sau
+    if(this.w.kneel > .001 && b.ulL){
+      for(const [ul, ll, ft, side] of [[b.ulL, b.llL, b.ftL, 1], [b.ulR, b.llR, b.ftR, -1]]){
+        ul.updateWorldMatrix(true, false);
+        const hip = R.worldToLocal(_e.setFromMatrixPosition(ul.matrixWorld).clone());
+        const footT = local(hip.x, kneelGround + .05, hip.z - .42);
+        const pole = local(hip.x + side*.02, hip.y - .3, hip.z + .8);
+        twoBoneIK(ul, ll, ft, footT, pole, this.w.kneel);
+      }
+    }
+    // thân và đầu: thở, cúi khi cầu nguyện, nhìn quanh khi đứng
+    const pray = Math.max(this.w.arms, this.w.cross);
+    if(b.torso) b.torso.rotateX(.05*pray + Math.sin(this.time*1.7)*.012);
+    if(b.head){
+      const idleLook = (1 - pray)*(1 - this.walk)*(s.pose === 'stand' ? 1 : .3);
+      b.head.rotateY(Math.sin(this.time*.29 + this.time*.01)*.22*idleLook);
+      b.head.rotateX(.18*pray);
+    }
+    if(b.head) b.head.updateWorldMatrix(true, true);
+    // các điểm trên người, tính theo xương thật của từng mô hình
+    if(!b.uaR || !b.head) return;
+    const P = bone => R.worldToLocal(new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld));
+    const head = P(b.head), neck = P(b.neck || b.head), sL = P(b.uaL), sR = P(b.uaR);
+    const chestY = neck.y - .2;
+    // chắp tay trước ngực
+    if(this.w.arms > .001){
+      twoBoneIK(b.uaL, b.laL, b.fL, local(.025, chestY, .2), local(sL.x + .5, sL.y - .5, sL.z - .3), this.w.arms);
+      twoBoneIK(b.uaR, b.laR, b.fR, local(-.025, chestY, .2), local(sR.x - .5, sR.y - .5, sR.z - .3), this.w.arms);
+    }
+    // làm dấu Thánh Giá: trán → ngực → vai trái → vai phải, tay trái đặt trước bụng
+    if(gesturing){
+      const g = (now - s.gestureAt)/1000, end = 2.6;
+      if(g > end){ s.gestureAt = -1; this.w.cross = 0; }
+      else{
+        const pts = {tran:[head.x, head.y + .05, head.z + .14], nguc:[neck.x, chestY, neck.z + .17], vaiTrai:[sL.x - .03, sL.y + .01, sL.z + .12], vaiPhai:[sR.x + .03, sR.y + .01, sR.z + .12]};
+        const keys = [[0, null], [.42, 'tran'], [.62, 'tran'], [.98, 'nguc'], [1.14, 'nguc'], [1.5, 'vaiTrai'], [1.66, 'vaiTrai'], [2.0, 'vaiPhai'], [2.14, 'vaiPhai'], [2.6, null]];
+        let i = 0; while(i < keys.length - 2 && g > keys[i+1][0]) i++;
+        const [t0, k0] = keys[i], [t1, k1] = keys[i+1], u = Math.min(1, Math.max(0, (g - t0)/((t1 - t0) || 1))), e = u*u*(3 - 2*u);
+        const rest = pts.nguc;   // điểm chờ khi bắt đầu và kết thúc
+        const p0 = k0 ? pts[k0] : rest, p1 = k1 ? pts[k1] : rest;
+        const wIn = Math.min(1, g/.35, (end - g)/.4); this.w.cross = Math.max(0, wIn);
+        const tgt = local(p0[0] + (p1[0] - p0[0])*e, p0[1] + (p1[1] - p0[1])*e, p0[2] + (p1[2] - p0[2])*e);
+        twoBoneIK(b.uaR, b.laR, b.fR, tgt, local(sR.x - .45, sR.y - .55, sR.z - .25), this.w.cross);
+        twoBoneIK(b.uaL, b.laL, b.fL, local(.04, chestY - .2, .2), local(sL.x + .5, sL.y - .5, sL.z - .2), this.w.cross);
+      }
+    }
+  }
+  dispose(){ this.disposed = true; scene.remove(this.root); this.root.traverse(o => { if(o.isMesh && !o.isSkinnedMesh) o.geometry?.dispose?.(); }); }
+}
+
 /* ---------- Lớp mạng ----------
    Có cấu hình Supabase: người chơi ở mọi máy thấy nhau (Supabase Realtime, gói miễn phí).
    Chưa có: chỉ các thẻ trong cùng một trình duyệt thấy nhau (BroadcastChannel).
@@ -1144,6 +1394,8 @@ const NET_CONFIG = {
   room: 'nha-nguyen-chinh'
 };
 const profile = Object.assign({name:'', style:'nam', shirt:1}, store.get('profile', {}));
+if(!profile.model) profile.model = lookModel(profile);
+if(profile.veil === undefined) profile.veil = profile.style === 'nu';
 const me = {id:Math.random().toString(36).slice(2, 10)};
 const net = {mode:'off', send:() => {}};
 const remotes = new Map();
@@ -1302,7 +1554,7 @@ function sendNet(){
   const changed = sig !== lastSig;
   if(!(changed && now - lastSent >= 200) && now - lastSent < 3000) return;
   lastSig = sig; lastSent = now;
-  net.send({id:me.id, name:profile.name || 'Khách hành hương', look:{style:profile.style, shirt:profile.shirt, skin:profile.skin || 0},
+  net.send({id:me.id, name:profile.name || 'Khách hành hương', look:myLook(),
     p:[+a.x.toFixed(3), +a.y.toFixed(3), +a.z.toFixed(3)], ry:+avatar.root.rotation.y.toFixed(3), pose:s.pose, py:s.py, folded:s.folded,
     ga:s.gestureAt >= 0 ? Math.round(now - s.gestureAt) : -1, ro, w:world});
 }
@@ -1886,7 +2138,10 @@ let litKey = '';
 // ---- hồ sơ nhân vật ở màn mở đầu ----
 function paintProfile(){
   $('#nameInput').value = profile.name;
-  document.querySelectorAll('#styleSeg [data-style]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === profile.style)));
+  const seg = $('#styleSeg');
+  seg.innerHTML = CHAR_MODELS.map(m => `<button data-model="${m.id}" aria-pressed="${m.id === profile.model}">${m.label}</button>`).join('');
+  seg.querySelectorAll('[data-model]').forEach(b => b.addEventListener('click', () => { profile.model = b.dataset.model; paintProfile(); }));
+  const fem = modelInfo(profile.model)?.female; $('#veilRow').hidden = !fem; $('#veilChk').checked = !!profile.veil;
   const sw = $('#shirtSeg');
   sw.innerHTML = SHIRTS.map((c, i) => `<button data-shirt="${i}" style="--c:${c}" aria-label="Màu áo ${i+1}" aria-pressed="${i === profile.shirt}"></button>`).join('');
   sw.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { profile.shirt = +b.dataset.shirt; paintProfile(); }));
@@ -1894,7 +2149,7 @@ function paintProfile(){
   sk.innerHTML = SKINS.map((c, i) => `<button data-skin="${i}" style="--c:#${c.toString(16).padStart(6,'0')}" aria-label="Màu da ${i+1}" aria-pressed="${i === (profile.skin || 0)}"></button>`).join('');
   sk.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { profile.skin = +b.dataset.skin; paintProfile(); }));
 }
-document.querySelectorAll('#styleSeg [data-style]').forEach(b => b.addEventListener('click', () => { profile.style = b.dataset.style; paintProfile(); }));
+$('#veilChk').addEventListener('change', e => { profile.veil = e.target.checked; });
 $('#nameInput').addEventListener('input', e => { profile.name = e.target.value.slice(0, 24); });
 paintProfile();
 if(isTouch) document.querySelectorAll('.act kbd').forEach(k => k.remove());
@@ -1911,7 +2166,7 @@ function enter(){
   started = true; audio()?.resume?.(); lockLandscape();
   $('#nameErr').hidden = true;
   profile.name = $('#nameInput').value.trim().slice(0, 24); if(window.__NN_TEST !== true) store.set('profile', profile);
-  if(!avatar) avatar = new Avatar({style:profile.style, shirt:profile.shirt, skin:profile.skin || 0}, '');
+  if(!avatar) avatar = new Avatar(myLook(), '');
   $('#actions').hidden = false; paintActions(); paintPresence();
   if(view.third) pitch = -.18;
   $('#intro').hidden = true; $('#hud').hidden = false;
@@ -1978,7 +2233,7 @@ function frame(){
     let dr = want - r.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); r.rotation.y += dr*Math.min(1, dt*10);
     avatar.update(dt, now);
     r.visible = view.third;
-    ax = r.position.x; az = r.position.z; headY = r.position.y + avatar.j.py + .72;
+    ax = r.position.x; az = r.position.z; headY = avatar.headY();
   }
   updateRemotes(dt, now);
   if(avatar) avatar.beads.visible = rosary.active;
@@ -2042,12 +2297,13 @@ window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.
 if(SHOWROOM){
   // 6 nhân vật mẫu trước cung thánh: đứng, đi, quỳ, làm dấu, chắp tay
   const cast = [
-    {id:'m1', name:'Giuse (đứng)', look:{style:'nam', shirt:0, skin:0}, x:-2.2, pose:'stand'},
-    {id:'m2', name:'Maria (khăn voan)', look:{style:'nu', shirt:1, skin:1}, x:-1.3, pose:'stand', folded:true},
-    {id:'m3', name:'Thảo (áo dài)', look:{style:'aodai', shirt:4, skin:0}, x:-.4, pose:'stand'},
-    {id:'m4', name:'Phêrô (quỳ)', look:{style:'nam', shirt:2, skin:2}, x:.5, pose:'kneel', py:.46},
-    {id:'m5', name:'Anna (làm dấu)', look:{style:'aodai', shirt:5, skin:1}, x:1.4, pose:'stand', cross:true},
-    {id:'m6', name:'Minh (đi bộ)', look:{style:'nam', shirt:3, skin:1}, x:2.3, pose:'stand', walk:true}
+    {id:'m1', name:'Giuse (đứng)', look:{model:'Casual_Male', shirt:0, skin:0}, x:-2.2, pose:'stand'},
+    {id:'m2', name:'Maria (khăn voan, chắp tay)', look:{model:'Casual_Female', shirt:1, skin:1, veil:true}, x:-1.3, pose:'stand', folded:true},
+    {id:'m3', name:'Thảo (áo vest)', look:{model:'Suit_Female', shirt:4, skin:0}, x:-.4, pose:'stand'},
+    {id:'m4', name:'Phêrô (quỳ)', look:{model:'Suit_Male', shirt:2, skin:2}, x:.5, pose:'kneel', py:.46},
+    {id:'m5', name:'Anna (làm dấu)', look:{model:'Casual2_Female', shirt:5, skin:1}, x:1.4, pose:'stand', cross:true},
+    {id:'m6', name:'Minh (đi bộ)', look:{model:'Casual3_Male', shirt:3, skin:1}, x:2.3, pose:'stand', walk:true},
+    {id:'m7', name:'Bà Têrêsa (ngồi ghế)', look:{model:'OldClassy_Female', shirt:0, skin:0}, x:-1.7, z:-4.74, ry:Math.PI, pose:'sit'}
   ];
   let k = 0;
   setTimeout(() => {
@@ -2058,7 +2314,7 @@ if(SHOWROOM){
       k++;
       for(const c of cast){
         const z = c.walk ? -6.4 + Math.sin(k*.06)*.9 : -6.6;
-        onNet({id:c.id, name:c.name, look:c.look, p:[c.x, 0, z], ry: c.walk ? (Math.cos(k*.06) > 0 ? 0 : Math.PI) : 0,
+        onNet({id:c.id, name:c.name, look:c.look, p:[c.x, 0, c.z ?? z], ry: c.ry ?? (c.walk ? (Math.cos(k*.06) > 0 ? 0 : Math.PI) : 0),
           pose:c.pose, py:c.py ?? null, folded:!!c.folded, ga: c.cross && k % 40 === 1 ? 0 : -1, w:'chapel'});
       }
     }, 100);
