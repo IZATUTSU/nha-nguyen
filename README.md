@@ -30,3 +30,12 @@ Người chơi sẽ không thấy ý nguyện này nữa (sau khi tải lại tr
 ### Giới hạn chống spam (trong `schema.sql`)
 - Toàn nhà nguyện: tối đa 150 ngọn nến và 40 ý nguyện mỗi 10 phút.
 - Mỗi máy: 30 giây mới được ghi một ý nguyện, mỗi ý nguyện chỉ bấm "Cầu nguyện" một lần.
+
+## Kiểm duyệt và quản trị
+1. Chạy `supabase/kiem-duyet.sql` trong Supabase → SQL Editor (sau `schema.sql`).
+2. Thêm email quản trị: `insert into public.admins (email) values ('email@cua-ban.com');`
+3. Supabase → Authentication → URL Configuration: Site URL = `https://izatutsu.github.io/nha-nguyen/quan-tri.html`.
+4. Mở `https://izatutsu.github.io/nha-nguyen/quan-tri.html`, nhập email, bấm link trong thư để đăng nhập.
+
+- Ý nguyện và tên có từ tục, số điện thoại, đường link, email bị chặn cả trong game lẫn trên máy chủ (bảng `tu_cam`, hàm `noi_dung_vi_pham`).
+- 3 người khác nhau báo cáo một ý nguyện thì ý nguyện tự ẩn; quản trị viên có thể hiện lại.

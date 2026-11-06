@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Quản trị Nhà Nguyện</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
+<style>
+/* Trang quản trị: một cột, đọc trên điện thoại; tông tối giống game */
+:root{
+  --night:#0f1118; --stone:#1b1e29; --stone-2:#252937; --ivory:#efe8da; --muted:#aaa497;
+  --candle:#e8b257; --candle-ink:#2a1c06; --warn:#e07a6f; --ok:#8cc79a; --line:rgba(239,232,218,.14);
+  --font-display:"Alegreya",Georgia,serif; --font-body:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+body{margin:0;background:var(--night);color:var(--ivory);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:46rem;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));display:grid;gap:16px}
+h1{font-family:var(--font-display);font-size:1.8rem;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:.88rem;margin:2px 0 0}
+.card{background:var(--stone);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px}
+label{display:grid;gap:6px;font-size:.85rem;color:var(--muted)}
+input{background:var(--night);color:var(--ivory);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+button{font:inherit;cursor:pointer}
+.btn{border:0;border-radius:999px;padding:10px 18px;font-weight:600;background:var(--candle);color:var(--candle-ink)}
+.btn.ghost{background:transparent;color:var(--ivory);border:1px solid var(--line)}
+.btn.small{padding:6px 12px;font-size:.84rem}
+.btn:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible{outline:2px solid var(--candle);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:transparent;color:var(--ivory);border-radius:999px;padding:6px 12px;font-size:.85rem}
+.tabs button[aria-pressed="true"]{background:var(--ivory);color:var(--night)}
+.tabs .n{font-variant-numeric:tabular-nums;opacity:.7;margin-left:4px}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+li{background:var(--stone);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px}
+li.reported{border-color:rgba(224,122,111,.55)}
+li.hidden-item{opacity:.6}
+li p{margin:0;overflow-wrap:anywhere}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:.8rem}
+.pill{border-radius:999px;padding:2px 8px;font-size:.75rem;font-weight:600}
+.pill.warn{background:rgba(224,122,111,.18);color:var(--warn)}
+.pill.off{background:rgba(239,232,218,.1);color:var(--muted)}
+.msg{font-size:.88rem;color:var(--muted);margin:0}
+.msg.err{color:var(--warn)} .msg.ok{color:var(--ok)}
+.empty{color:var(--muted);border:1px dashed var(--line);border-radius:12px;padding:16px;text-align:center}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <div><h1>Quản trị Nhà Nguyện</h1><p class="sub">Xem, ẩn hoặc hiện lại ý nguyện trên tường ý nguyện</p></div>
+    <button class="btn ghost small" id="signOut" hidden>Đăng xuất</button>
+  </div>
+
+  <section class="card" id="loginCard" hidden>
+    <p class="msg">Nhập email quản trị. Hệ thống sẽ gửi một đường link đăng nhập vào hộp thư của bạn; mở link đó trên chính thiết bị này.</p>
+    <label for="email">Email quản trị<input id="email" type="email" autocomplete="email" placeholder="ban@gmail.com"></label>
+    <div class="row"><button class="btn" id="sendLink">Gửi link đăng nhập</button></div>
+    <p class="msg" id="loginMsg" aria-live="polite"></p>
+  </section>
+
+  <section class="card" id="denyCard" hidden>
+    <p class="msg err" id="denyMsg"></p>
+  </section>
+
+  <section id="adminArea" hidden>
+    <div class="top" style="margin-bottom:12px">
+      <div class="tabs" role="group" aria-label="Lọc ý nguyện">
+        <button data-tab="reported" aria-pressed="true">Bị báo cáo<span class="n" id="nReported"></span></button>
+        <button data-tab="visible" aria-pressed="false">Đang hiện<span class="n" id="nVisible"></span></button>
+        <button data-tab="hidden" aria-pressed="false">Đã ẩn<span class="n" id="nHidden"></span></button>
+      </div>
+      <button class="btn ghost small" id="reload">Tải lại</button>
+    </div>
+    <p class="msg" id="listMsg" aria-live="polite"></p>
+    <ul id="list"></ul>
+  </section>
+</main>
+
+<script type="module">
+const SUPABASE_URL = 'https://ekrgjladdatqogpwouln.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9kj42ELBVCbLCzRtPVXLeQ_8fAs58gp';
+const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/+esm');
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let rows = [], tab = 'reported';
+
+async function boot(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ $('#loginCard').hidden = false; return; }
+  $('#signOut').hidden = false;
+  const {data:isAdmin, error} = await sb.rpc('is_admin');
+  if(error || !isAdmin){
+    $('#denyCard').hidden = false;
+    $('#denyMsg').textContent = `Tài khoản ${session.user.email} chưa có quyền quản trị. Hãy nhờ người quản lý thêm email này vào bảng admins.`;
+    return;
+  }
+  $('#adminArea').hidden = false;
+  load();
+}
+async function load(){
+  $('#listMsg').textContent = 'Đang tải…';
+  const {data, error} = await sb.rpc('admin_list');
+  if(error){ $('#listMsg').textContent = 'Không tải được: ' + error.message; $('#listMsg').className = 'msg err'; return; }
+  rows = data || []; $('#listMsg').textContent = ''; $('#listMsg').className = 'msg';
+  draw();
+}
+function draw(){
+  const groups = {
+    reported: rows.filter(r => r.so_bao_cao > 0),
+    visible: rows.filter(r => !r.hidden),
+    hidden: rows.filter(r => r.hidden)
+  };
+  $('#nReported').textContent = groups.reported.length; $('#nVisible').textContent = groups.visible.length; $('#nHidden').textContent = groups.hidden.length;
+  const items = groups[tab];
+  if(!items.length){
+    $('#list').innerHTML = `<li class="empty">${tab === 'reported' ? 'Không có ý nguyện nào bị báo cáo.' : tab === 'hidden' ? 'Chưa ẩn ý nguyện nào.' : 'Chưa có ý nguyện nào.'}</li>`;
+    return;
+  }
+  $('#list').innerHTML = items.map(r => `
+    <li class="${r.so_bao_cao > 0 ? 'reported' : ''} ${r.hidden ? 'hidden-item' : ''}">
+      <p>${esc(r.noi_dung)}</p>
+      <div class="meta">
+        <span>${esc(r.name)} · ${new Date(r.created_at).toLocaleString('vi-VN')} · ${r.prayed} lượt cầu nguyện</span>
+        <span class="row">
+          ${r.so_bao_cao > 0 ? `<span class="pill warn">${r.so_bao_cao} báo cáo</span>` : ''}
+          ${r.hidden ? '<span class="pill off">Đang ẩn</span>' : ''}
+          <button class="btn small ${r.hidden ? '' : 'ghost'}" data-id="${esc(r.id)}" data-hide="${r.hidden ? '0' : '1'}">${r.hidden ? 'Hiện lại' : 'Ẩn'}</button>
+        </span>
+      </div>
+    </li>`).join('');
+  document.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => setHidden(b, b.dataset.id, b.dataset.hide === '1')));
+}
+async function setHidden(btn, id, hide){
+  btn.disabled = true;
+  const {error} = await sb.rpc('admin_set_hidden', {p_id:id, p_hidden:hide});
+  if(error){ btn.disabled = false; $('#listMsg').textContent = 'Không thực hiện được: ' + error.message; $('#listMsg').className = 'msg err'; return; }
+  const r = rows.find(x => x.id === id); if(r){ r.hidden = hide; if(!hide) r.so_bao_cao = 0; }
+  $('#listMsg').textContent = hide ? 'Đã ẩn ý nguyện.' : 'Đã hiện lại ý nguyện và xoá các báo cáo cũ.'; $('#listMsg').className = 'msg ok';
+  draw();
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); draw();
+}));
+$('#reload').addEventListener('click', load);
+$('#sendLink').addEventListener('click', async () => {
+  const email = $('#email').value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $('#loginMsg').textContent = 'Email chưa đúng định dạng.'; $('#loginMsg').className = 'msg err'; return; }
+  $('#sendLink').disabled = true;
+  const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname}});
+  $('#sendLink').disabled = false;
+  if(error){ $('#loginMsg').textContent = 'Chưa gửi được: ' + error.message; $('#loginMsg').className = 'msg err'; return; }
+  $('#loginMsg').textContent = `Đã gửi link đăng nhập tới ${email}. Mở hộp thư và bấm vào link (xem cả mục Spam).`; $('#loginMsg').className = 'msg ok';
+});
+$('#signOut').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+sb.auth.onAuthStateChange(event => { if(event === 'SIGNED_IN' && $('#adminArea').hidden && $('#denyCard').hidden) location.reload(); });
+boot();
+</script>
+</body>
+</html>

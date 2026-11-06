@@ -169,6 +169,8 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
 #rotate{position:fixed;inset:0;z-index:60;display:grid;place-items:center;text-align:center;background:var(--night);color:var(--ivory);font-family:var(--font-display);font-size:1.25rem;padding:24px}
 #rotate svg{color:var(--candle);margin-bottom:12px;animation:tilt 2.4s ease-in-out infinite}
 @keyframes tilt{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+.link-btn{border:0;background:none;padding:4px 2px;color:var(--muted);font-size:.76rem;text-decoration:underline;text-underline-offset:2px}
+.field-err{margin:0;color:#f0a39a;font-size:.84rem}
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){#sheet,#adore .ring{animation:none}}
 </style>
@@ -195,6 +197,7 @@ textarea{background:var(--night);color:var(--ivory);border:1px solid var(--line)
       <div class="seg" id="styleSeg"><button data-style="nam" aria-pressed="true">Nam</button><button data-style="nu" aria-pressed="false">Nữ, khăn voan</button><button data-style="aodai" aria-pressed="false">Áo dài</button></div>
       <div class="plabel">Màu da</div>
       <div class="swatches" id="skinSeg"></div>
+      <p class="field-err" id="nameErr" hidden></p>
       <div class="plabel">Màu áo</div>
       <div class="swatches" id="shirtSeg"></div>
     </div>
@@ -359,6 +362,22 @@ const shared = {online:false, candles:[], intentions:[], redraw:null};
 const rackList = () => shared.online ? shared.candles : candles;
 const intentionsList = () => shared.online ? shared.intentions : intentions;
 const prayedSet = new Set(store.get('prayed', []));
+// ---- Kiểm duyệt: cùng danh sách và quy tắc với hàm noi_dung_vi_pham trên máy chủ ----
+const TU_CAM = ['đụ','địt','đéo','lồn','buồi','cặc','đĩ','cave','đần độn','óc chó','chó đẻ','mẹ mày','bố mày','đm','dm','đmm','dmm','đcm','dcm','vcl','vkl','vl',
+  'clm','cmm','cc','cl','loz','dit','djt','đjt','súc vật','thằng chó','con đĩ','fuck','fck','shit','bitch','dick','porn','sex','xxx','cá độ','nổ hũ','tài xỉu'];
+function noiDungViPham(t){
+  if(!t || !String(t).trim()) return null;
+  t = String(t);
+  const n = ' ' + t.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ' ') + ' ';
+  for(const w of TU_CAM) if(n.includes(' ' + w + ' ')) return 'từ ngữ không phù hợp';
+  if(/([0-9][ .\-]?){8,}[0-9]/.test(t)) return 'số điện thoại';
+  if(/(https?:\/\/|www\.|t\.me\/|zalo\.me|fb\.com|bit\.ly|[a-z0-9-]+\.(com|vn|net|org|xyz|me|io|info|top|link|site|online|shop|store|club|app|ly|gg|biz|tk)([^a-z]|$))/i.test(t)) return 'đường link';
+  if(/[a-z0-9._%+-]+@[a-z0-9-]+\.[a-z]/i.test(t)) return 'địa chỉ email';
+  return null;
+}
+const safeName = n => (n && !noiDungViPham(n)) ? String(n).slice(0, 24) : 'Khách hành hương';
+const reportedSet = new Set(store.get('reported', []));
+const deviceId = store.get('device', null) || (() => { const id = 'tb-' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store.set('device', id); return id; })();
 const uuid = () => (window.crypto?.randomUUID ? crypto.randomUUID()
   : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === 'x' ? r : (r&3|8)).toString(16); }));
 let lastIntentAt = 0;
@@ -709,7 +728,7 @@ box(.1, .06, 2.02, M.darkWood, WALL_NOTES.x, 2.33, WALL_NOTES.z); box(.1, .06, 2
 const noteGroup = new THREE.Group(); scene.add(noteGroup);
 function refreshNotes(){
   noteGroup.clear();
-  const r = rng(5), n = Math.min(intentionsList().length, 20);
+  const r = rng(5), n = Math.min(intentionsList().filter(it => !reportedSet.has(String(it.id))).length, 20);
   for(let i=0;i<n;i++){
     const p = new THREE.Mesh(new THREE.PlaneGeometry(.26,.18), M.paper);
     p.position.set(WALL_NOTES.x-.05, 2.12 - Math.floor(i/5)*.27, WALL_NOTES.z - .72 + (i%5)*.36);
@@ -1161,7 +1180,7 @@ async function useSupabaseNet(){
 let sb = null;
 const rowIntention = r => ({id:r.id, text:r.text, name:r.name, t:Date.parse(r.created_at), prayed:r.prayed});
 const freeSlots = () => slots.map((_, i) => i).filter(i => !COMMUNITY.includes(i));
-const friendlyErr = e => /Quá nhiều/.test(e?.message || '') ? 'đang có quá nhiều lượt, bạn thử lại sau ít phút.' : 'bạn kiểm tra mạng rồi thử lại.';
+const friendlyErr = e => /Nội dung có/.test(e?.message || '') ? e.message.replace(/^Nội dung có/, 'nội dung có') : /Quá nhiều/.test(e?.message || '') ? 'đang có quá nhiều lượt, bạn thử lại sau ít phút.' : 'bạn kiểm tra mạng rồi thử lại.';
 async function initShared(){
   try{
     const since = new Date(Date.now() - 24*HOUR).toISOString();
@@ -1173,6 +1192,10 @@ async function initShared(){
     shared.candles = c.data.map(r => ({id:r.id, t:Date.parse(r.created_at)}));
     shared.intentions = i.data.map(rowIntention);
     shared.online = true; refreshRack(); refreshNotes(); shared.redraw?.();
+    setInterval(async () => {
+      const {data, error} = await sb.from('intentions').select('id,name,text,prayed,created_at').order('created_at', {ascending:false}).limit(60);
+      if(!error && data){ shared.intentions = data.map(rowIntention); refreshNotes(); shared.redraw?.(); }
+    }, 120000);
     sb.channel('db-' + me.id)
       .on('postgres_changes', {event:'INSERT', schema:'public', table:'candles'}, ({new:r}) => {
         if(!r?.id || shared.candles.some(x => x.id === r.id)) return;
@@ -1197,8 +1220,13 @@ async function shareCandle(){
   const {error} = await sb.from('candles').insert({id, name:profile.name || 'Khách hành hương'});
   if(error){ shared.candles = shared.candles.filter(x => x.id !== id); refreshRack(); toast('Chưa gửi được ngọn nến lên nhà nguyện chung: ' + friendlyErr(error)); }
 }
-async function addIntention(text){
-  const name = profile.name || 'Khách hành hương';
+function addIntention(text){
+  const bad = noiDungViPham(text);
+  if(bad){ toast(`Ý nguyện có ${bad} nên chưa thể ghi lên tường. Bạn sửa lại giúp nhé.`); return false; }
+  postIntention(text); return true;
+}
+async function postIntention(text){
+  const name = safeName(profile.name);
   if(shared.online && sb){
     const id = uuid();
     shared.intentions.unshift({id, text, name, t:Date.now(), prayed:0}); refreshNotes(); shared.redraw?.();
@@ -1209,6 +1237,15 @@ async function addIntention(text){
     }
   }else{
     intentions.unshift({id:Date.now(), text, name, t:Date.now(), prayed:0}); saveIntentions(); refreshNotes(); shared.redraw?.();
+  }
+}
+async function reportIntention(id){
+  reportedSet.add(String(id)); store.set('reported', [...reportedSet].slice(-500));
+  refreshNotes(); shared.redraw?.();
+  toast('Cảm ơn bạn đã báo cáo. Ý nguyện này đã được ẩn trên máy của bạn và sẽ được quản trị viên xem xét.');
+  if(shared.online && sb && typeof id === 'string' && id.length > 20){
+    const {error} = await sb.rpc('report_intention', {p_id:id, p_reporter:deviceId});
+    if(error) console.warn('Chưa gửi được báo cáo', error);
   }
 }
 async function prayFor(it){
@@ -1234,7 +1271,7 @@ function onNet(m){
   let r = remotes.get(m.id);
   if(!r){
     if(remotes.size >= 40) return;   // giới hạn số người hiển thị để máy yếu không bị chậm
-    const nm = String(m.name || 'Khách hành hương').slice(0, 24);
+    const nm = safeName(m.name);
     r = {av:new Avatar(m.look || {}, nm), vel:0, name:nm, ro:null};
     r.av.root.position.set(m.p[0], m.p[1], m.p[2]); r.av.root.rotation.y = m.ry || 0;
     r.tx = m.p[0]; r.tz = m.p[2]; r.last = now;
@@ -1503,7 +1540,7 @@ function openCandle(){
   $('#lightBtn').addEventListener('click', () => {
     const text = $('#candleText').value.trim();
     candles.push({t:Date.now(), text}); saveCandles();
-    if(text && $('#candleWall').checked) addIntention(text);
+    if(text && $('#candleWall').checked && !addIntention(text)) return;
     note('candle', 'candles');
     if(shared.online) shareCandle();
     const free = slots.map((_, i) => i).filter(i => !COMMUNITY.includes(i));
@@ -1628,12 +1665,19 @@ function openIntentions(){
   const list = $('#intentList');
   const draw = () => {
     if(!list.isConnected){ shared.redraw = null; return; }
-    const items = intentionsList();
+    const items = intentionsList().filter(it => !reportedSet.has(String(it.id)) && !noiDungViPham(it.text));
     if(!items.length){ list.innerHTML = '<li class="empty">Chưa có ý nguyện nào. Hãy viết ý nguyện đầu tiên, nó sẽ được ghim lên tường gỗ cạnh cửa.</li>'; return; }
     list.innerHTML = items.map(it => {
       const done = prayedSet.has(String(it.id));
-      return `<li><p>${esc(it.text)}</p><div class="meta"><span>${it.name ? esc(it.name) + ' · ' : ''}${new Date(it.t).toLocaleDateString('vi-VN')}</span><button class="btn ghost small" data-pray="${esc(it.id)}" aria-pressed="${done}">${done ? 'Đã cầu nguyện' : 'Cầu nguyện'} · ${it.prayed}</button></div></li>`;
+      return `<li><p>${esc(it.text)}</p><div class="meta"><span>${it.name ? esc(it.name) + ' · ' : ''}${new Date(it.t).toLocaleDateString('vi-VN')}</span><span class="row"><button class="link-btn" data-report="${esc(it.id)}">Báo cáo</button><button class="btn ghost small" data-pray="${esc(it.id)}" aria-pressed="${done}">${done ? 'Đã cầu nguyện' : 'Cầu nguyện'} · ${it.prayed}</button></span></div></li>`;
     }).join('');
+    list.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
+      if(b.dataset.armed !== '1'){   // bấm 2 lần để tránh bấm nhầm
+        b.dataset.armed = '1'; b.textContent = 'Bấm lần nữa để báo cáo';
+        setTimeout(() => { if(b.isConnected){ b.dataset.armed = ''; b.textContent = 'Báo cáo'; } }, 4000); return;
+      }
+      reportIntention(b.dataset.report);
+    }));
     list.querySelectorAll('[data-pray]').forEach(b => b.addEventListener('click', () => {
       const it = intentionsList().find(x => String(x.id) === b.dataset.pray); if(!it) return;
       beadSound(true); prayFor(it);
@@ -1643,7 +1687,7 @@ function openIntentions(){
   $('#intentAdd').addEventListener('click', () => {
     const v = $('#intentText').value.trim(); if(!v) { $('#intentText').focus(); return; }
     if(Date.now() - lastIntentAt < 30000){ toast('Bạn vừa ghi một ý nguyện. Hãy đợi khoảng nửa phút rồi ghi tiếp.'); return; }
-    lastIntentAt = Date.now(); addIntention(v); $('#intentText').value = '';
+    if(addIntention(v)){ lastIntentAt = Date.now(); $('#intentText').value = ''; }
   });
 }
 
@@ -1862,7 +1906,10 @@ viewBtn.addEventListener('click', toggleView); paintView();
 
 function enter(){
   if(started) return;
+  const nameBad = noiDungViPham($('#nameInput').value);
+  if(nameBad){ $('#nameErr').textContent = `Tên hiển thị có ${nameBad}. Bạn chọn tên khác giúp nhé.`; $('#nameErr').hidden = false; $('#nameInput').focus(); return; }
   started = true; audio()?.resume?.(); lockLandscape();
+  $('#nameErr').hidden = true;
   profile.name = $('#nameInput').value.trim().slice(0, 24); if(window.__NN_TEST !== true) store.set('profile', profile);
   if(!avatar) avatar = new Avatar({style:profile.style, shirt:profile.shirt, skin:profile.skin || 0}, '');
   $('#actions').hidden = false; paintActions(); paintPresence();
