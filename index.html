@@ -1243,7 +1243,7 @@ class Avatar{
         });
         o.material = Array.isArray(o.material) ? out : out[0];
       });
-      const bone = n => model.getObjectByName(n);
+      const bone = n => model.getObjectByName(n) || model.getObjectByName(n.replace(/[.:\/\[\]]/g, ''));
       this.b = {hips:bone('Hips'), torso:bone('Torso'), neck:bone('Neck'), head:bone('Head'),
         shL:bone('Shoulder.L'), uaL:bone('UpperArm.L'), laL:bone('LowerArm.L'), fL:bone('Fist.L'),
         shR:bone('Shoulder.R'), uaR:bone('UpperArm.R'), laR:bone('LowerArm.R'), fR:bone('Fist.R'),
