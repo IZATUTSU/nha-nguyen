@@ -90,7 +90,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let rows = [], tab = 'reported';
 
+let booted = false;
 async function boot(){
+  if(booted) return; booted = true;
   const {data:{session}} = await sb.auth.getSession();
   if(!session){ $('#loginCard').hidden = false; return; }
   $('#signOut').hidden = false;
@@ -167,7 +169,14 @@ $('#sendLink').addEventListener('click', async () => {
   $('#loginMsg').textContent = `Đã gửi link đăng nhập tới ${email}. Mở hộp thư và bấm vào link (xem cả mục Spam).`; $('#loginMsg').className = 'msg ok';
 });
 $('#signOut').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
-sb.auth.onAuthStateChange(event => { if(event === 'SIGNED_IN' && $('#adminArea').hidden && $('#denyCard').hidden) location.reload(); });
+// Chỉ khi đang ở ô đăng nhập mà đăng nhập thành công (ví dụ mở link ở thẻ khác) thì mới chạy lại kiểm tra.
+// Không tải lại trang: Supabase cũng phát sự kiện SIGNED_IN khi khôi phục phiên, tải lại sẽ thành vòng lặp.
+sb.auth.onAuthStateChange((event, session) => {
+  if(event === 'SIGNED_IN' && session && !$('#loginCard').hidden){
+    $('#loginCard').hidden = true; booted = false;
+    setTimeout(boot, 0);   // không gọi Supabase ngay trong callback để tránh treo
+  }
+});
 boot();
 </script>
 </body>
