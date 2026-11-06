@@ -94,10 +94,19 @@ async function boot(){
   const {data:{session}} = await sb.auth.getSession();
   if(!session){ $('#loginCard').hidden = false; return; }
   $('#signOut').hidden = false;
-  const {data:isAdmin, error} = await sb.rpc('is_admin');
+  // Ngay sau khi bấm link trong email, phiên đăng nhập có thể chưa gắn kịp vào yêu cầu: thử lại vài lần
+  let isAdmin = false, error = null;
+  for(let i = 0; i < 4; i++){
+    await sb.auth.getUser();
+    ({data:isAdmin, error} = await sb.rpc('is_admin'));
+    if(!error && isAdmin) break;
+    await new Promise(r => setTimeout(r, 800));
+  }
   if(error || !isAdmin){
     $('#denyCard').hidden = false;
-    $('#denyMsg').textContent = `Tài khoản ${session.user.email} chưa có quyền quản trị. Hãy nhờ người quản lý thêm email này vào bảng admins.`;
+    $('#denyMsg').textContent = error
+      ? `Chưa kiểm tra được quyền quản trị (${error.message}). Hãy tải lại trang.`
+      : `Tài khoản ${session.user.email} chưa có quyền quản trị. Hãy nhờ người quản lý thêm email này vào bảng admins.`;
     return;
   }
   $('#adminArea').hidden = false;
