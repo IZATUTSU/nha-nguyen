@@ -2320,7 +2320,9 @@ if(SHOWROOM){
     if(camQ){ const [cx, cz, cy] = camQ.split(',').map(Number); player.x = cx; player.z = cz; yaw = cy || 0; }
     setInterval(() => {
       k++;
+      const solo = new URLSearchParams(location.search).get('solo');
       for(const c of cast){
+        if(solo && !solo.split(',').includes(c.id)) continue;
         const z = c.walk ? -6.4 + Math.sin(k*.06)*.9 : -6.6;
         onNet({id:c.id, name:c.name, look:c.look, p:[c.x, 0, c.z ?? z], ry: c.ry ?? (c.walk ? (Math.cos(k*.06) > 0 ? 0 : Math.PI) : 0),
           pose:c.pose, py:c.py ?? null, folded:!!c.folded, ga: c.cross && k % 40 === 1 ? 0 : -1, w:'chapel'});
